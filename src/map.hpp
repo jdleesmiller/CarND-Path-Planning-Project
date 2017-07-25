@@ -4,7 +4,7 @@
 #include <vector>
 
 struct Map {
-  Map(const char * file);
+  Map(const char *file);
 
   struct Waypoint {
     double x;
@@ -31,6 +31,8 @@ struct Map {
   FrenetPoint GetFrenet(double x, double y, double theta) const;
 
 private:
+  void LoadWaypoints(const char *file);
+
   size_t GetClosestWaypointIndex(double x, double y) const;
 
   size_t GetNextWaypointIndex(double x, double y, double theta) const;

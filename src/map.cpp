@@ -12,23 +12,7 @@
 // double max_s = 6945.554;
 
 Map::Map(const char *file) {
-  std::ifstream in(file, std::ifstream::in);
-  std::string line;
-  while (getline(in, line)) {
-  	std::istringstream iss(line);
-    Waypoint waypoint;
-  	iss >> waypoint.x;
-  	iss >> waypoint.y;
-  	iss >> waypoint.s;
-  	iss >> waypoint.d_x;
-  	iss >> waypoint.d_y;
-    waypoints.push_back(waypoint);
-  }
-
-  if (waypoints.size() == 0) {
-    std::cerr << "No waypoint data found (wrong pwd?)" << std::endl;
-    exit(-1);
-  }
+  LoadWaypoints(file);
 }
 
 double distance(double x1, double y1, double x2, double y2) {
@@ -138,6 +122,25 @@ Map::CartesianPoint Map::GetCartesian(double s, double d) const {
   return point;
 }
 
+void Map::LoadWaypoints(const char *file) {
+  std::ifstream in(file, std::ifstream::in);
+  std::string line;
+  while (getline(in, line)) {
+  	std::istringstream iss(line);
+    Waypoint waypoint;
+  	iss >> waypoint.x;
+  	iss >> waypoint.y;
+  	iss >> waypoint.s;
+  	iss >> waypoint.d_x;
+  	iss >> waypoint.d_y;
+    waypoints.push_back(waypoint);
+  }
+
+  if (waypoints.size() == 0) {
+    std::cerr << "No waypoint data found (wrong pwd?)" << std::endl;
+    exit(-1);
+  }
+}
 
   // vector<MapWaypoint> map_waypoints;
   // for (size_t i = 0; i < map_waypoints_x.size(); ++i) {
