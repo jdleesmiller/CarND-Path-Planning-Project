@@ -3,6 +3,8 @@
 
 #include <vector>
 
+#include "spline.h"
+
 struct Map {
   Map(const char *file);
 
@@ -24,8 +26,12 @@ struct Map {
     double y;
   };
 
-  // Transform from Frenet s,d coordinates to Cartesian x,y
-  CartesianPoint GetCartesian(double s, double d) const;
+  // Transform from Frenet s,d coordinates to Cartesian x,y using linear
+  // interpolation.
+  CartesianPoint GetCartesianLinear(double s, double d) const;
+
+  // Transform from Frenet s,d coordinates to Cartesian x,y using the spline.
+  CartesianPoint GetCartesianSpline(double s, double d) const;
 
   // Transform from Cartesian x,y coordinates to Frenet s,d coordinates
   FrenetPoint GetFrenet(double x, double y, double theta) const;
@@ -33,11 +39,17 @@ struct Map {
 private:
   void LoadWaypoints(const char *file);
 
+  void FitSplines();
+
   size_t GetClosestWaypointIndex(double x, double y) const;
 
   size_t GetNextWaypointIndex(double x, double y, double theta) const;
 
   std::vector<Waypoint> waypoints;
+  tk::spline x_spline;
+  tk::spline y_spline;
+  tk::spline d_x_spline;
+  tk::spline d_y_spline;
 };
 
 #endif

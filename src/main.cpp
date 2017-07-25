@@ -103,7 +103,7 @@ int main() {
             double new_car_s = car_s;
             for (double t = 0; t < horizon; t += dt) {
               new_car_s += dt * speed;
-              Map::CartesianPoint point = map.GetCartesian(new_car_s, car_d);
+              Map::CartesianPoint point = map.GetCartesianSpline(new_car_s, 6.16483);
               next_x_vals.push_back(point.x);
               next_y_vals.push_back(point.y);
             }

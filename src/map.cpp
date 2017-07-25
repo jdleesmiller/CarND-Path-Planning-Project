@@ -1,5 +1,4 @@
 #include "map.hpp"
-#include "spline.h"
 
 #include <cmath>
 #include <fstream>
@@ -13,6 +12,7 @@
 
 Map::Map(const char *file) {
   LoadWaypoints(file);
+  FitSplines();
 }
 
 double distance(double x1, double y1, double x2, double y2) {
@@ -97,7 +97,7 @@ Map::FrenetPoint Map::GetFrenet(double x, double y, double theta) const {
   return frenet;
 }
 
-Map::CartesianPoint Map::GetCartesian(double s, double d) const {
+Map::CartesianPoint Map::GetCartesianLinear(double s, double d) const {
   int prev_wp = -1;
   while(s > waypoints[prev_wp + 1].s && prev_wp < (int)(waypoints.size() - 1)) {
     prev_wp++;
@@ -142,19 +142,44 @@ void Map::LoadWaypoints(const char *file) {
   }
 }
 
-  // vector<MapWaypoint> map_waypoints;
-  // for (size_t i = 0; i < map_waypoints_x.size(); ++i) {
-  //   map_waypoints.push_back(
-  //     MapWaypoint(map_waypoints_x[i], map_waypoints_y[i]));
-  // }
-  // sort(map_waypoints.begin(), map_waypoints.end(), MapWaypoint::ByX());
-  // vector<double> map_waypoints_x_sorted;
-  // vector<double> map_waypoints_y_sorted;
-  // for (size_t i = 0; i < map_waypoints.size(); ++i) {
-  //   cout << map_waypoints[i].x << endl;
-  //   map_waypoints_x_sorted.push_back(map_waypoints[i].x);
-  //   map_waypoints_y_sorted.push_back(map_waypoints[i].y);
-  // }
+void Map::FitSplines() {
+  std::vector<double> s;
+  std::vector<double> x;
+  std::vector<double> y;
+  std::vector<double> d_x;
+  std::vector<double> d_y;
+  for (size_t i = 0; i < waypoints.size(); ++i) {
+    s.push_back(waypoints[i].s);
+    x.push_back(waypoints[i].x);
+    y.push_back(waypoints[i].y);
+    d_x.push_back(waypoints[i].d_x);
+    d_y.push_back(waypoints[i].d_y);
+  }
 
-  // tk::spline map_waypoints_xy;
-  // map_waypoints_xy.set_points(map_waypoints_x_sorted, map_waypoints_y_sorted);
+  x_spline.set_points(s, x);
+  y_spline.set_points(s, y);
+  d_x_spline.set_points(s, d_x);
+  d_y_spline.set_points(s, d_y);
+}
+
+Map::CartesianPoint Map::GetCartesianSpline(double s, double d) const {
+  double x_s = x_spline(s);
+  double y_s = y_spline(s);
+  double d_x_s = d_x_spline(s);
+  double d_y_s = d_y_spline(s);
+
+  // The spline smoothing may not preserve the norm, so renormalize.
+  double d_norm = sqrt(d_x_s * d_x_s + d_y_s * d_y_s);
+
+  // std::cout << "s=" << s << " d=" << d <<
+  //   " x_s=" << x_s <<
+  //   " y_s=" << y_s <<
+  //   " d_x_s=" << d_x_s <<
+  //   " d_y_s=" << d_y_s <<
+  //   " d_norm=" << d_norm << std::endl;
+
+  CartesianPoint point;
+  point.x = x_s + d * d_x_s / d_norm;
+  point.y = y_s + d * d_y_s / d_norm;
+  return point;
+}
