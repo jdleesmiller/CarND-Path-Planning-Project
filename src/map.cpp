@@ -8,7 +8,11 @@
 #include <string>
 
 // The max s value before wrapping around the track back to 0
-// double max_s = 6945.554;
+const double MAX_S = 6945.554;
+
+// Repat this many points at the start and the end to make sure the
+// splines knit together when s wraps around MAX_S.
+const size_t SPLINE_OVERLAP = 4;
 
 Map::Map(const char *file) {
   LoadWaypoints(file);
@@ -136,8 +140,8 @@ void Map::LoadWaypoints(const char *file) {
     waypoints.push_back(waypoint);
   }
 
-  if (waypoints.size() == 0) {
-    std::cerr << "No waypoint data found (wrong pwd?)" << std::endl;
+  if (waypoints.size() < SPLINE_OVERLAP) {
+    std::cerr << "Not enough waypoints (wrong pwd?)" << std::endl;
     exit(-1);
   }
 }
@@ -148,13 +152,39 @@ void Map::FitSplines() {
   std::vector<double> y;
   std::vector<double> d_x;
   std::vector<double> d_y;
-  for (size_t i = 0; i < waypoints.size(); ++i) {
+
+  // Append some points at the end with negative s chainage.
+  size_t n = waypoints.size();
+  for (size_t i = n - SPLINE_OVERLAP; i < n; ++i) {
+    s.push_back(waypoints[i].s - MAX_S);
+    x.push_back(waypoints[i].x);
+    y.push_back(waypoints[i].y);
+    d_x.push_back(waypoints[i].d_x);
+    d_y.push_back(waypoints[i].d_y);
+  }
+
+  // Now add the waypoints.
+  for (size_t i = 0; i < n; ++i) {
     s.push_back(waypoints[i].s);
     x.push_back(waypoints[i].x);
     y.push_back(waypoints[i].y);
     d_x.push_back(waypoints[i].d_x);
     d_y.push_back(waypoints[i].d_y);
   }
+
+  // Append some of the waypoints at the start, after the maximum
+  // actual s chainage, to help the spline close.
+  for (size_t i = 0; i < SPLINE_OVERLAP; ++i) {
+    s.push_back(waypoints[i].s + MAX_S);
+    x.push_back(waypoints[i].x);
+    y.push_back(waypoints[i].y);
+    d_x.push_back(waypoints[i].d_x);
+    d_y.push_back(waypoints[i].d_y);
+  }
+
+  // for (size_t i = 0; i < s.size(); ++i) {
+  //   std::cout << s[i] << "\t" << x[i] << "\t" << y[i] << std::endl;
+  // }
 
   x_spline.set_points(s, x);
   y_spline.set_points(s, y);
