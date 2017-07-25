@@ -91,7 +91,7 @@ int main() {
           	vector<double> next_x_vals;
           	vector<double> next_y_vals;
 
-            double speed = 22; // 22; // m/s (just under 50mph)
+            double speed = 20; // 22; // m/s (just under 50mph)
             double dt = 0.02; // seconds per timestep
             double horizon = 3; // seconds
 
@@ -106,6 +106,17 @@ int main() {
               Map::CartesianPoint point = map.GetCartesianSpline(new_car_s, 6.16483);
               next_x_vals.push_back(point.x);
               next_y_vals.push_back(point.y);
+            }
+
+            size_t num_mix = 30;
+            size_t num_mix_points =
+              min(num_mix, min(previous_path_x.size(), next_x_vals.size()));
+            for (size_t i = 0; i < num_mix_points; ++i) {
+              double mix_i = (double)i / num_mix;
+              next_x_vals[i] = (double)previous_path_x[i] * (1 - mix_i) +
+                next_x_vals[i] * mix_i;
+              next_y_vals[i] = (double)previous_path_y[i] * (1 - mix_i) +
+                next_y_vals[i] * mix_i;
             }
 
           	// TODO: define a path made up of (x,y) points that the car will visit sequentially every .02 seconds
