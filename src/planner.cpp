@@ -23,7 +23,11 @@ double Planner::OtherCar::GetSpeed() const {
 double Planner::OtherCar::GetRange(double car_s) const {
   double ds = s - car_s;
   if (ds > MAX_S / 2) {
-    std::cout << "LARGE DS: " << ds << std::endl;
+    // The other car is near the end of the track; our car is near the start.
+    ds -= MAX_S;
+  } else if (ds < -MAX_S / 2) {
+    // The other car is near the start of the track; our car is near the end.
+    ds += MAX_S;
   }
   return ds;
 }
@@ -71,6 +75,9 @@ void Planner::Plan(double car_s, double car_d, double car_speed) {
     new_car_s = car_s;
   } else {
     new_car_s = plan_s.back();
+    if (new_car_s > MAX_S) {
+      new_car_s -= MAX_S;
+    }
   }
 
   double target_speed = TARGET_SPEED;
@@ -78,7 +85,8 @@ void Planner::Plan(double car_s, double car_d, double car_speed) {
   if (blocking_index < other_cars.size()) {
     double headway = other_cars[blocking_index].GetRange(car_s) / car_speed;
     if (headway <= HORIZON) {
-      target_speed = other_cars[blocking_index].GetSpeed() * 0.95;
+      std::cout << "BLOCKING " << other_cars[blocking_index].id << " " << other_cars[blocking_index].d << " v=" << other_cars[blocking_index].GetSpeed() << std::endl;
+      target_speed = other_cars[blocking_index].GetSpeed() * 0.99;
     }
   }
 
@@ -106,7 +114,6 @@ size_t Planner::FindNearestBlockingCar(double car_s, double car_d) {
   for (size_t i = 0; i < other_cars.size(); ++i) {
     if (other_cars[i].IsBlocking(car_s, car_d)) {
       if (other_cars[i].s < min_s) {
-        std::cout << "BLOCKING " << other_cars[i].id << " " << other_cars[i].d << " v=" << other_cars[i].GetSpeed() << std::endl;
         min_s = other_cars[i].s;
         min_i = i;
       }
