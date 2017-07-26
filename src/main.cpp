@@ -87,11 +87,23 @@ int main() {
 
           	// Sensor Fusion Data, a list of all other cars on the same side of the road.
           	auto sensor_fusion = j[1]["sensor_fusion"];
+            planner.ClearOtherCars();
+            for (size_t i = 0; i < sensor_fusion.size(); ++i) {
+              Planner::OtherCar other_car;
+              other_car.id = sensor_fusion[i][0];
+              other_car.x = sensor_fusion[i][1];
+              other_car.y = sensor_fusion[i][2];
+              other_car.vx = sensor_fusion[i][3];
+              other_car.vy = sensor_fusion[i][4];
+              other_car.s = sensor_fusion[i][5];
+              other_car.d = sensor_fusion[i][6];
+              planner.AddOtherCar(other_car);
+            }
 
             if (previous_path_x.size() > 0) {
               planner.Update(previous_path_x[0], previous_path_y[0]);
             }
-            planner.Plan(car_s, car_d);
+            planner.Plan(car_s, car_d, car_speed);
 
           	json msgJson;
           	msgJson["next_x"] = planner.GetPlanX();
