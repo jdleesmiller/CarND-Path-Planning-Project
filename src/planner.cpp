@@ -2,27 +2,13 @@
 #include <cmath>
 #include <iostream>
 #include <limits>
-#include <random>
 
 #include "planner.hpp"
 #include "trajectory.hpp"
 
 const double DT = 0.02; // seconds per timestep
-const double HORIZON = 3; // seconds
+const double HORIZON = 5; // seconds
 const double LATENCY = 0.3; // seconds
-
-const size_t NUM_SAMPLES = 2000;
-
-std::random_device rd;
-std::mt19937 gen(rd());
-
-const double S_STDEV = 50;
-const double V_STDEV = 10;
-const double A_STDEV = 10;
-
-std::normal_distribution<> S_DISTRIBUTION(0, S_STDEV);
-std::normal_distribution<> V_DISTRIBUTION(0, V_STDEV);
-std::normal_distribution<> A_DISTRIBUTION(0, A_STDEV);
 
 Planner::Planner(const Map &map) :
   map(map), jerk_minimizer(HORIZON - LATENCY) { }
@@ -39,6 +25,10 @@ void Planner::AddOtherCar(double s, double d, double vx, double vy) {
   other_cars.push_back(Car::MakeLinear(s, d, vx, vy));
 }
 
+double Planner::GetCost(const Car &c) const {
+  return c.GetTotalCost(0, DT, HORIZON - LATENCY, other_cars);
+}
+
 void Planner::Update(size_t previous_plan_size,
   double car_s, double car_d, double car_v)
 {
@@ -53,34 +43,56 @@ void Planner::Update(size_t previous_plan_size,
     car_d = car.GetD(elapsed_time);
   }
 
-  double end_time = elapsed_time + HORIZON - LATENCY;
-  double end_car_s = car.GetS(end_time);
-  double end_car_v = car.GetSpeed(end_time);
-  double end_car_a = car.GetAcceleration(end_time);
-  std::cout << "END s=" << end_car_s << " v=" << end_car_v << " a=" << end_car_a << std::endl;
-  // double new_car_d = car.GetD(end_time);
-  Car best_car;
-  double best_cost = std::numeric_limits<double>::infinity();
-  for (size_t i = 0; i < NUM_SAMPLES; ++i) {
-    double candidate_s = end_car_s + S_DISTRIBUTION(gen);
-    double candidate_v = end_car_v + V_DISTRIBUTION(gen);
-    double candidate_a = end_car_a + A_DISTRIBUTION(gen);
-    Car candidate_car = Car::MakeQuintic(jerk_minimizer,
+  double end_time = HORIZON - LATENCY;
+  std::array<double, 3> goal;
+  goal[0] = car.GetS(end_time);
+  goal[1] = car.GetSpeed(end_time);
+  goal[2] = car.GetAcceleration(end_time);
+
+  std::array<double, 3> step_size;
+  step_size[0] = 5; // s coordinate
+  step_size[1] = 1;
+  step_size[2] = 1;
+
+  double delta_size = 1.2;
+  std::array<double, 5> deltas;
+  deltas[0] = -delta_size;
+  deltas[1] = -1.0 / delta_size;
+  deltas[2] = 0;
+  deltas[3] = 1.0 / delta_size;
+  deltas[4] = delta_size;
+
+  for (;;) {
+    double start_cost = GetCost(car);
+    for (size_t i = 0; i < goal.size(); ++i) {
+      size_t best_delta = 0;
+      double best_cost = std::numeric_limits<double>::infinity();
+      for (size_t j = 0; j < deltas.size(); ++j) {
+        goal[i] += step_size[i] * deltas[j];
+        Car candidate_car = Car::MakeQuintic(jerk_minimizer,
+          car_s, car_v, car_a, 6.16483,
+          goal[0], goal[1], goal[2], 6.16483);
+        goal[i] -= step_size[i] * deltas[j];
+        double candidate_cost = GetCost(candidate_car);
+        if (candidate_cost < best_cost) {
+          best_cost = candidate_cost;
+          best_delta = j;
+        }
+      }
+      if (deltas[best_delta] == 0) {
+        step_size[i] /= delta_size;
+      } else {
+        goal[i] += step_size[i] * deltas[best_delta];
+        step_size[i] *= deltas[best_delta];
+      }
+    }
+    car = Car::MakeQuintic(jerk_minimizer,
       car_s, car_v, car_a, 6.16483,
-      candidate_s, candidate_v, candidate_a, 6.16483);
-    double candidate_cost = candidate_car.GetTotalCost(
-      0, DT, HORIZON - LATENCY, other_cars);
-    if (i % 100 == 0) {
-      std::cout << "s=" << candidate_s << " v=" << candidate_v << " a=" << candidate_a << " cost=" << candidate_cost << std::endl;
-      std::cout << candidate_car << std::endl;
-    }
-    if (candidate_cost < best_cost) {
-      best_cost = candidate_cost;
-      best_car = candidate_car;
-    }
+      goal[0], goal[1], goal[2], 6.16483);
+    double end_cost = GetCost(car);
+    std:: cout << "GD " << goal[0] << "\t" << goal[1] << "\t" << goal[2] << "\t" << end_cost << "\t" << car << std::endl;
+    if (fabs(start_cost - end_cost) < 1e-3) break;
   }
-  std::cout << best_car << " best cost=" << best_cost << std::endl;
-  car = best_car;
 
   TrimPlan();
 
@@ -93,15 +105,15 @@ void Planner::Update(size_t previous_plan_size,
     plan_d.push_back(6.16483);
   }
 
-  // for (size_t i = 0; i < GetPlanSize(); ++i) {
-  //   std::cout << i << "\t" << plan_s[i] << "\t" << plan_x[i] << "\t" << plan_y[i] << "\t";
-  //   if (i > 0) {
-  //     double vx = (plan_x[i] - plan_x[i - 1]) / DT;
-  //     double vy = (plan_y[i] - plan_y[i - 1]) / DT;
-  //     std::cout << sqrt(vx * vx + vy * vy);
-  //   }
-  //   std::cout << std::endl;
-  // }
+  for (size_t i = 0; i < GetPlanSize(); ++i) {
+    std::cout << i << "\t" << plan_s[i] << "\t" << plan_x[i] << "\t" << plan_y[i] << "\t";
+    if (i > 0) {
+      double vx = (plan_x[i] - plan_x[i - 1]) / DT;
+      double vy = (plan_y[i] - plan_y[i - 1]) / DT;
+      std::cout << sqrt(vx * vx + vy * vy);
+    }
+    std::cout << std::endl;
+  }
 }
 
 double Planner::AdvancePlan(size_t previous_plan_size) {

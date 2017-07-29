@@ -71,7 +71,7 @@ double logistic(double x) {
 }
 
 double Car::GetCost(double t, const std::vector<Car> &other_cars) const {
-  double collision_penalty = 0; // CollidesWithAny(t, other_cars);
+  double collision_penalty = CollidesWithAny(t, other_cars);
 
   double jerk = s.GetJerk(t);
   double max_jerk_penalty = fmax(0, jerk - MAX_JERK);
@@ -84,13 +84,15 @@ double Car::GetCost(double t, const std::vector<Car> &other_cars) const {
   double speed = s.GetSpeed(t);
   double max_speed_penalty = fmax(0, speed - MAX_SPEED);
   double min_speed_penalty = -fmin(0, speed + MIN_SPEED);
-  double target_speed_penalty = logistic(fabs(speed - TARGET_SPEED));
 
   double fail_penalty = collision_penalty +
     max_jerk_penalty + min_jerk_penalty +
     max_accel_penalty + min_accel_penalty +
     max_speed_penalty + min_speed_penalty;
-  return FAIL_WEIGHT * fail_penalty + TARGET_WEIGHT * target_speed_penalty;
+
+  double target_penalty = fabs(speed - TARGET_SPEED) +
+    fabs(jerk) + fabs(acceleration);
+  return FAIL_WEIGHT * fail_penalty + TARGET_WEIGHT * target_penalty;
 }
 
 double Car::GetTotalCost(
