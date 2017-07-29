@@ -1,3 +1,6 @@
+#ifndef PATH_PLANNING_TRAJECTORY_H
+#define PATH_PLANNING_TRAJECTORY_H
+
 #include <array>
 
 #include "Eigen-3.3/Eigen/Core"
@@ -29,3 +32,5 @@ struct Trajectory {
 private:
   Coefficients coefficients;
 };
+
+#endif
