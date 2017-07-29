@@ -27,7 +27,7 @@ private:
 
   void TrimPlan();
 
-  double GetCost(const Car &c) const;
+  double GetCost(const Car &c, bool debug = false) const;
 
   const Map &map;
   std::deque<double> plan_x;

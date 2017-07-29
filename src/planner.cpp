@@ -7,7 +7,7 @@
 #include "trajectory.hpp"
 
 const double DT = 0.02; // seconds per timestep
-const double HORIZON = 5; // seconds
+const double HORIZON = 2; // seconds
 const double LATENCY = 0.3; // seconds
 
 const double LANE_WIDTH = 4;
@@ -27,14 +27,16 @@ void Planner::AddOtherCar(double s, double d, double vx, double vy) {
   other_cars.push_back(Car::MakeLinear(s, d, vx, vy));
 }
 
-double Planner::GetCost(const Car &c) const {
-  return c.GetTotalCost(0, DT, HORIZON - LATENCY, other_cars);
+double Planner::GetCost(const Car &c, bool debug) const {
+  return c.GetTotalCost(0, DT, HORIZON - LATENCY, other_cars, debug);
 }
 
 void Planner::Update(size_t previous_plan_size,
   double car_s, double car_d, double car_v)
 {
   double car_a = 0;
+  double car_dv = 0;
+  double car_da = 0;
   double elapsed_time = AdvancePlan(previous_plan_size);
   if (elapsed_time == 0) {
     car = Car::MakeInitial(jerk_minimizer, car_s, car_v, car_a, car_d);
@@ -43,6 +45,8 @@ void Planner::Update(size_t previous_plan_size,
     car_v = car.GetSpeed(elapsed_time);
     car_a = car.GetAcceleration(elapsed_time);
     car_d = car.GetD(elapsed_time);
+    car_dv = car.GetDSpeed(elapsed_time);
+    car_da = car.GetDAcceleration(elapsed_time);
   }
 
   double end_time = HORIZON - LATENCY;
@@ -50,69 +54,70 @@ void Planner::Update(size_t previous_plan_size,
   goal[0] = car.GetS(end_time);
   goal[1] = car.GetSpeed(end_time);
   goal[2] = car.GetAcceleration(end_time);
+  double goal_d = LANE_WIDTH * (
+    round((car.GetD(end_time) - LANE_WIDTH / 2) / LANE_WIDTH) + 0.5);
 
   std::array<double, 3> step_size;
   step_size[0] = 5; // s coordinate
   step_size[1] = 1;
   step_size[2] = 1;
 
-  double delta_size = 1.2;
-  std::array<double, 5> deltas;
+  double delta_size = 1;
+  std::array<double, 3> deltas;
   deltas[0] = -delta_size;
-  deltas[1] = -1.0 / delta_size;
-  deltas[2] = 0;
-  deltas[3] = 1.0 / delta_size;
-  deltas[4] = delta_size;
+  deltas[1] = 0;
+  deltas[2] = delta_size;
 
-  std::array<int, 3> lane_deltas({{-1, 0, 1}});
-  std::array<Car, 3> lane_cars({{car, car, car}});
-  size_t best_lane = 1;
-  double best_lane_cost = std::numeric_limits<double>::infinity();
-
-  for (size_t lane = 0; lane < lane_deltas.size(); ++lane) {
-    double lane_d = LANE_WIDTH * (
-      round((car_d - LANE_WIDTH / 2) / LANE_WIDTH) + lane_deltas[lane] + 0.5);
-
-    double end_cost;
-    for (;;) {
-      double start_cost = GetCost(lane_cars[lane]);
-      for (size_t i = 0; i < goal.size(); ++i) {
-        size_t best_delta = 0;
-        double best_cost = std::numeric_limits<double>::infinity();
-        for (size_t j = 0; j < deltas.size(); ++j) {
-          goal[i] += step_size[i] * deltas[j];
-          Car candidate_car = Car::MakeQuintic(jerk_minimizer,
-            car_s, car_v, car_a, car_d,
-            goal[0], goal[1], goal[2], lane_d);
-          goal[i] -= step_size[i] * deltas[j];
-          double candidate_cost = GetCost(candidate_car);
-          if (candidate_cost < best_cost) {
-            best_cost = candidate_cost;
-            best_delta = j;
-          }
+  for (;;) {
+    double start_cost = GetCost(car);
+    for (size_t i = 0; i < goal.size(); ++i) {
+      size_t best_delta = 0;
+      double best_cost = std::numeric_limits<double>::infinity();
+      for (size_t j = 0; j < deltas.size(); ++j) {
+        goal[i] += step_size[i] * deltas[j];
+        Car candidate_car = Car::MakeQuintic(jerk_minimizer,
+          car_s, car_v, car_a, car_d, car_dv, car_da,
+          goal[0], goal[1], goal[2], goal_d);
+        double candidate_cost = GetCost(candidate_car);
+        std::cout << "GD " << i << " " << j << " " << goal[0] << "\t" << goal[1] << "\t" << goal[2] << "\t" << goal_d << "\t" << candidate_cost << "\t" << std::endl;
+        if (candidate_cost < best_cost) {
+          best_cost = candidate_cost;
+          best_delta = j;
         }
-        if (deltas[best_delta] == 0) {
-          step_size[i] /= delta_size;
-        } else {
-          goal[i] += step_size[i] * deltas[best_delta];
-          step_size[i] *= deltas[best_delta];
-        }
+        goal[i] -= step_size[i] * deltas[j];
       }
-      lane_cars[lane] = Car::MakeQuintic(jerk_minimizer,
-        car_s, car_v, car_a, car_d,
-        goal[0], goal[1], goal[2], lane_d);
-      end_cost = GetCost(lane_cars[lane]);
-      // std:: cout << "GD " << lane_d << " " << goal[0] << "\t" << goal[1] << "\t" << goal[2] << "\t" << end_cost << "\t" << car << std::endl;
-      if (fabs(start_cost - end_cost) < 1e-3) break;
+      if (deltas[best_delta] == 0) {
+        step_size[i] /= delta_size;
+      } else {
+        goal[i] += step_size[i] * deltas[best_delta];
+        step_size[i] *= deltas[best_delta];
+      }
     }
 
-    if (end_cost < best_lane_cost) {
-      best_lane_cost = end_cost;
-      best_lane = lane;
+    int best_lane_delta = 0;
+    double best_lane_cost = std::numeric_limits<double>::infinity();
+    for (int lane_delta = -1; lane_delta <= 1; ++lane_delta) {
+      goal_d += lane_delta * LANE_WIDTH;
+      Car candidate_car = Car::MakeQuintic(jerk_minimizer,
+        car_s, car_v, car_a, car_d, car_dv, car_da,
+        goal[0], goal[1], goal[2], goal_d);
+      double candidate_cost = GetCost(candidate_car);
+      std::cout << "GD lane " << lane_delta << " " << goal[0] << "\t" << goal[1] << "\t" << goal[2] << "\t" << goal_d << "\t" << candidate_cost << "\t" << std::endl;
+      if (candidate_cost < best_lane_cost) {
+        best_lane_cost = candidate_cost;
+        best_lane_delta = lane_delta;
+      }
+      goal_d -= lane_delta * LANE_WIDTH;
     }
+    goal_d += best_lane_delta * LANE_WIDTH;
+
+    car = Car::MakeQuintic(jerk_minimizer,
+      car_s, car_v, car_a, car_d, car_dv, car_da,
+      goal[0], goal[1], goal[2], goal_d);
+    double end_cost = GetCost(car, false);
+    std::cout << "GD END " << goal[0] << "\t" << goal[1] << "\t" << goal[2] << "\t" << goal_d << "\t" << end_cost << "\t" << std::endl;
+    if (fabs(start_cost - end_cost) < 1e-3) break;
   }
-  // std::cout << lane_deltas[best_lane] << std::endl;
-  car = lane_cars[best_lane];
 
   TrimPlan();
 
