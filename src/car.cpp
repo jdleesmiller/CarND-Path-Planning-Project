@@ -6,17 +6,17 @@ const double MAX_S = 6945.554;
 
 const double DT = 0.02;
 
-const double MAX_JERK = 10; // m/s^3
-const double MAX_ACCELERATION = 10; // m/s^2
+const double MAX_JERK = 6; // m/s^3
+const double MAX_ACCELERATION = 6; // m/s^2
 const double MAX_SPEED = 22; // 22 m/s is just under 50mph;
-const double TARGET_SPEED = 20; // m/s
+const double TARGET_SPEED = 20.5; // m/s
 const double MIN_SPEED = -2; // m/s
-const double COLLISION_LENGTH = 10; // m
-const double COLLISION_WIDTH = 3; // m
+const double COLLISION_LENGTH = 12; // m
+const double COLLISION_WIDTH = 3.7; // m
 const double MAX_D = 12; // m
 const double LANE_WIDTH = 4;
 
-const double FAIL_WEIGHT = 10;
+const double FAIL_WEIGHT = 50;
 const double TARGET_WEIGHT = 1;
 
 Car::Car() { }
@@ -85,7 +85,7 @@ double logistic(double x) {
 
 double Car::GetCost(double t, const std::vector<Car> &other_cars, bool debug) const {
   double collision_penalty =
-    CollidesWithAny(t, other_cars) ? 20 : 0;
+    CollidesWithAny(t, other_cars) ? 10 : 0;
 
   double jerk = s.GetJerk(t) * DT;
   double max_jerk_penalty = fmax(0, jerk - MAX_JERK);
@@ -111,10 +111,14 @@ double Car::GetCost(double t, const std::vector<Car> &other_cars, bool debug) co
 
   double lane_centre = LANE_WIDTH * (
     round((lane_d - LANE_WIDTH / 2) / LANE_WIDTH) + 0.5);
-  double lane_keeping_penalty = logistic(fabs(lane_d - lane_centre));
+  double lane_keeping_penalty = 5 * logistic(fabs(lane_d - lane_centre));
+  double lateral_jerk = d.GetJerk(t);
+  double lateral_acceleration = d.GetAcceleration(t);
 
-  double target_penalty = 10 * fabs(speed - TARGET_SPEED) +
-    fabs(jerk) * DT + fabs(acceleration) * DT + lane_keeping_penalty;
+  double target_penalty = fabs(speed - TARGET_SPEED) +
+    fabs(jerk * DT) + fabs(acceleration * DT) +
+    fabs(lateral_jerk * DT) + fabs(lateral_acceleration * DT) +
+    lane_keeping_penalty;
 
   if (debug) {
     std::cout << "fail=" << fail_penalty << " target=" << target_penalty << std::endl;

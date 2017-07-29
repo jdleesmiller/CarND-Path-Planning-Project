@@ -8,22 +8,22 @@
 #include "trajectory.hpp"
 
 const double DT = 0.02; // seconds per timestep
-const double HORIZON = 2; // seconds
-const double LATENCY = 0.3; // seconds
+const double HORIZON = 2.5; // seconds
+const double LATENCY = 0.5; // seconds
 
-const size_t NUM_SAMPLES = 2000;
+const size_t NUM_SAMPLES = 12;
 
 std::random_device rd;
 std::mt19937 gen(rd());
 
-const double S_STDEV = 50;
-const double V_STDEV = 10;
-const double A_STDEV = 10;
+const double S_STDEV = 3;
+const double V_STDEV = 1;
+const double A_STDEV = 1;
 
 std::normal_distribution<> S_DISTRIBUTION(0, S_STDEV);
 std::normal_distribution<> V_DISTRIBUTION(0, V_STDEV);
 std::normal_distribution<> A_DISTRIBUTION(0, A_STDEV);
-std::uniform_int_distribution<> D_DISTRIBUTION(-1, 1);
+std::uniform_int_distribution<> D_DISTRIBUTION(0, 2);
 
 const double LANE_WIDTH = 4;
 
@@ -46,10 +46,10 @@ double Planner::GetCost(const Car &c, bool debug) const {
   return c.GetTotalCost(0, DT, HORIZON - LATENCY, other_cars, debug);
 }
 
-double RoundToLane(double d) {
-  double lane = round((d - LANE_WIDTH / 2) / LANE_WIDTH);
-  return LANE_WIDTH * (lane + 0.5);
-}
+// double RoundToLane(double d) {
+//   double lane = round((d - LANE_WIDTH / 2) / LANE_WIDTH);
+//   return LANE_WIDTH * (lane + 0.5);
+// }
 
 void Planner::Update(size_t previous_plan_size,
   double car_s, double car_d, double car_v)
@@ -73,97 +73,69 @@ void Planner::Update(size_t previous_plan_size,
   double end_s = car.GetS(end_time);
   double end_v = car.GetSpeed(end_time);
   double end_a = car.GetAcceleration(end_time);
-  double end_d = RoundToLane(car.GetD(end_time));
 
   Car best_car;
   double best_cost = std::numeric_limits<double>::infinity();
   for (size_t i = 0; i < NUM_SAMPLES; ++i) {
-    double candidate_s = end_s + S_DISTRIBUTION(gen);
-    double candidate_v = end_v + V_DISTRIBUTION(gen);
-    double candidate_a = end_a + A_DISTRIBUTION(gen);
-    double candidate_d = end_d + D_DISTRIBUTION(gen) * LANE_WIDTH;
-    Car candidate_car = Car::MakeQuintic(jerk_minimizer,
+    std::array<double, 3> goal;
+    goal[0] = end_s + S_DISTRIBUTION(gen);
+    goal[1] = end_v + V_DISTRIBUTION(gen);
+    goal[2] = end_a + A_DISTRIBUTION(gen);
+    double goal_d = D_DISTRIBUTION(gen) * LANE_WIDTH + LANE_WIDTH / 2;
+
+    std::array<double, 3> step_size;
+    step_size[0] = 5; // s coordinate
+    step_size[1] = 1;
+    step_size[2] = 1;
+
+    double delta_size = 1;
+    std::array<double, 3> deltas;
+    deltas[0] = -delta_size;
+    deltas[1] = 0;
+    deltas[2] = delta_size;
+
+    car = Car::MakeQuintic(jerk_minimizer,
       car_s, car_v, car_a, car_d, car_dv, car_da,
-      candidate_s, candidate_v, candidate_a, candidate_d);
-    double candidate_cost = candidate_car.GetTotalCost(
-      0, DT, HORIZON - LATENCY, other_cars);
-    if (i % 100 == 0) {
-      std::cout << "s=" << candidate_s << " v=" << candidate_v << " a=" << candidate_a << " cost=" << candidate_cost << std::endl;
-      std::cout << candidate_car << std::endl;
-    }
-    if (candidate_cost < best_cost) {
-      best_cost = candidate_cost;
-      best_car = candidate_car;
+      goal[0], goal[1], goal[2], goal_d);
+
+    for (;;) {
+      double start_cost = GetCost(car);
+      for (size_t i = 0; i < goal.size(); ++i) {
+        size_t best_delta = 0;
+        double best_cost = std::numeric_limits<double>::infinity();
+        for (size_t j = 0; j < deltas.size(); ++j) {
+          goal[i] += step_size[i] * deltas[j];
+          Car candidate_car = Car::MakeQuintic(jerk_minimizer,
+            car_s, car_v, car_a, car_d, car_dv, car_da,
+            goal[0], goal[1], goal[2], goal_d);
+          double candidate_cost = GetCost(candidate_car);
+          // std::cout << "GD " << i << " " << j << " " << goal[0] << "\t" << goal[1] << "\t" << goal[2] << "\t" << goal_d << "\t" << candidate_cost << "\t" << std::endl;
+          if (candidate_cost < best_cost) {
+            best_cost = candidate_cost;
+            best_delta = j;
+          }
+          goal[i] -= step_size[i] * deltas[j];
+        }
+        if (deltas[best_delta] == 0) {
+          step_size[i] /= delta_size;
+        } else {
+          goal[i] += step_size[i] * deltas[best_delta];
+          step_size[i] *= deltas[best_delta];
+        }
+      }
+
+      car = Car::MakeQuintic(jerk_minimizer,
+        car_s, car_v, car_a, car_d, car_dv, car_da,
+        goal[0], goal[1], goal[2], goal_d);
+      double end_cost = GetCost(car, false);
+      if (end_cost < best_cost) {
+        best_cost = end_cost;
+        best_car = car;
+      }
+      // std::cout << "GD END " << goal[0] << "\t" << goal[1] << "\t" << goal[2] << "\t" << goal_d << "\t" << end_cost << "\t" << std::endl;
+      if (fabs(start_cost - end_cost) < 1e-3) break;
     }
   }
-
-  // double end_time = HORIZON - LATENCY;
-  // std::array<double, 3> goal;
-  // goal[0] = car.GetS(end_time);
-  // goal[1] = car.GetSpeed(end_time);
-  // goal[2] = car.GetAcceleration(end_time);
-  //
-  // std::array<double, 3> step_size;
-  // step_size[0] = 5; // s coordinate
-  // step_size[1] = 1;
-  // step_size[2] = 1;
-  //
-  // double delta_size = 1;
-  // std::array<double, 3> deltas;
-  // deltas[0] = -delta_size;
-  // deltas[1] = 0;
-  // deltas[2] = delta_size;
-  //
-  // for (;;) {
-  //   double start_cost = GetCost(car);
-  //   for (size_t i = 0; i < goal.size(); ++i) {
-  //     size_t best_delta = 0;
-  //     double best_cost = std::numeric_limits<double>::infinity();
-  //     for (size_t j = 0; j < deltas.size(); ++j) {
-  //       goal[i] += step_size[i] * deltas[j];
-  //       Car candidate_car = Car::MakeQuintic(jerk_minimizer,
-  //         car_s, car_v, car_a, car_d, car_dv, car_da,
-  //         goal[0], goal[1], goal[2], goal_d);
-  //       double candidate_cost = GetCost(candidate_car);
-  //       std::cout << "GD " << i << " " << j << " " << goal[0] << "\t" << goal[1] << "\t" << goal[2] << "\t" << goal_d << "\t" << candidate_cost << "\t" << std::endl;
-  //       if (candidate_cost < best_cost) {
-  //         best_cost = candidate_cost;
-  //         best_delta = j;
-  //       }
-  //       goal[i] -= step_size[i] * deltas[j];
-  //     }
-  //     if (deltas[best_delta] == 0) {
-  //       step_size[i] /= delta_size;
-  //     } else {
-  //       goal[i] += step_size[i] * deltas[best_delta];
-  //       step_size[i] *= deltas[best_delta];
-  //     }
-  //   }
-  //
-  //   int best_lane_delta = 0;
-  //   double best_lane_cost = std::numeric_limits<double>::infinity();
-  //   for (int lane_delta = -1; lane_delta <= 1; ++lane_delta) {
-  //     goal_d += lane_delta * LANE_WIDTH;
-  //     Car candidate_car = Car::MakeQuintic(jerk_minimizer,
-  //       car_s, car_v, car_a, car_d, car_dv, car_da,
-  //       goal[0], goal[1], goal[2], goal_d);
-  //     double candidate_cost = GetCost(candidate_car);
-  //     std::cout << "GD lane " << lane_delta << " " << goal[0] << "\t" << goal[1] << "\t" << goal[2] << "\t" << goal_d << "\t" << candidate_cost << "\t" << std::endl;
-  //     if (candidate_cost < best_lane_cost) {
-  //       best_lane_cost = candidate_cost;
-  //       best_lane_delta = lane_delta;
-  //     }
-  //     goal_d -= lane_delta * LANE_WIDTH;
-  //   }
-  //   goal_d += best_lane_delta * LANE_WIDTH;
-  //
-  //   car = Car::MakeQuintic(jerk_minimizer,
-  //     car_s, car_v, car_a, car_d, car_dv, car_da,
-  //     goal[0], goal[1], goal[2], goal_d);
-  //   double end_cost = GetCost(car, false);
-  //   std::cout << "GD END " << goal[0] << "\t" << goal[1] << "\t" << goal[2] << "\t" << goal_d << "\t" << end_cost << "\t" << std::endl;
-  //   if (fabs(start_cost - end_cost) < 1e-3) break;
-  // }
 
   std::cout << best_car << " best cost=" << best_cost << std::endl;
   car = best_car;
