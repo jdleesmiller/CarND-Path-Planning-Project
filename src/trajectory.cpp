@@ -1,5 +1,7 @@
 #include "trajectory.hpp"
 
+Trajectory::Trajectory() : coefficients({{0, 0, 0, 0, 0, 0}}) {}
+
 Trajectory::Trajectory(
   double c0, double c1, double c2, double c3, double c4, double c5) :
   coefficients({{c0, c1, c2, c3, c4, c5}}) {}
@@ -10,7 +12,7 @@ Trajectory::Trajectory(const Coefficients &coefficients) :
 Trajectory::JerkMinimizer::JerkMinimizer(double t) : t(t) {
   double t2 = t*t;
   double t3 = t*t2;
-  double t4 = t*t3;
+  double t4 = t2*t2;
   double t5 = t*t4;
   Eigen::Matrix<double, 3, 3> weights;
   weights << t3, t4, t5,
@@ -30,7 +32,7 @@ Trajectory Trajectory::JerkMinimizer::operator()(
   Eigen::Vector3d x;
   x = a.solve(b);
 
-  return Trajectory(s0, v0, a0, x[0], x[1], x[2]);
+  return Trajectory(s0, v0, a0/2, x[0], x[1], x[2]);
 }
 
 double Trajectory::GetPosition(double t) const {
@@ -57,4 +59,30 @@ double Trajectory::GetSpeed(double t) const {
       )
     )
   );
+}
+
+double Trajectory::GetAcceleration(double t) const {
+  return 2 * coefficients[2] + t * (
+    6 * coefficients[3] + t * (
+      12 * coefficients[4] + t * (
+        20 * coefficients[5]
+      )
+    )
+  );
+}
+
+double Trajectory::GetJerk(double t) const {
+  return 6 * coefficients[3] + t * (
+    24 * coefficients[4] + t * (
+      60 * coefficients[5]
+    )
+  );
+}
+
+std::ostream &operator<<(std::ostream &os, const Trajectory &trajectory) {
+  for (auto it = trajectory.GetCoefficients().cbegin();
+    it != trajectory.GetCoefficients().cend(); ++it) {
+    os << " " << *it;
+  }
+  return os;
 }
