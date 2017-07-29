@@ -32,7 +32,7 @@ struct Planner {
 
   void Plan(double car_s, double car_d, double car_speed);
 
-  bool PlanIsEmpty() const;
+  size_t GetPlanSize() const;
 
   const std::deque<double> &GetPlanX() const { return plan_x; }
 
