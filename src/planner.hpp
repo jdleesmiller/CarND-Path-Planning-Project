@@ -27,7 +27,7 @@ private:
 
   void TrimPlan();
 
-  size_t FindNearestBlockingCar(double car_s, double car_d);
+  double GetCost(const Car &c, bool debug = false) const;
 
   const Map &map;
   std::deque<double> plan_x;

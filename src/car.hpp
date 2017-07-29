@@ -16,7 +16,7 @@ struct Car {
 
   static Car MakeQuintic(
     const Trajectory::JerkMinimizer &jerk_minimizer,
-    double s0, double v0, double a0, double d0,
+    double s0, double v0, double a0, double d0, double dv0, double da0,
     double s1, double v1, double a1, double d1);
 
   static Car MakeLinear(double s0, double d0, double vx, double vy);
@@ -31,10 +31,14 @@ struct Car {
 
   double GetD(double t) const;
 
-  double GetCost(double t, const std::vector<Car> &other_cars) const;
+  double GetDSpeed(double t) const;
+
+  double GetDAcceleration(double t) const;
+
+  double GetCost(double t, const std::vector<Car> &other_cars, bool debug = false) const;
 
   double GetTotalCost(double t0, double dt, double t1,
-    const std::vector<Car> &other_cars) const;
+    const std::vector<Car> &other_cars, bool debug = false) const;
 
   bool Collides(double t, const Car &car) const;
 
