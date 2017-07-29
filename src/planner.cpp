@@ -103,6 +103,7 @@ void Planner::Plan(double car_s, double car_d, double car_speed) {
 
   TrimPlan();
 
+  double car_a = 0;
   if (GetPlanSize() > 1) {
     car_s = plan_s.back();
     if (car_s > MAX_S) {
@@ -110,6 +111,13 @@ void Planner::Plan(double car_s, double car_d, double car_speed) {
     }
     car_speed = (plan_s[GetPlanSize() - 1] - plan_s[GetPlanSize() - 2]) / DT;
   }
+  if (GetPlanSize() > 2) {
+    car_a = (
+      plan_s[GetPlanSize() - 1] -
+      2 * plan_s[GetPlanSize() - 2] +
+      plan_s[GetPlanSize() - 3]) / (DT * DT);
+  }
+  std::cout << "CAR A " << car_a << std::endl;
 
   double target_speed = MAX_SPEED;
   size_t blocking_index = FindNearestBlockingCar(car_s, car_d);
@@ -125,23 +133,34 @@ void Planner::Plan(double car_s, double car_d, double car_speed) {
   double final_v = car_speed;
   GetMaxDistanceAndSpeed(1, target_speed, final_s, final_v);
   std::cout << "init s=" << car_s << "init v=" << car_speed << " final s=" << final_s << " final v=" << final_v << std::endl;
+  size_t old_size = GetPlanSize();
+
+  double final_a = 0;
+  if (final_v < MAX_SPEED / 2) {
+    final_a = MAX_ACCELERATION / 2;
+  }
 
   Trajectory::JerkMinimizer jerk_minimizer(HORIZON - LATENCY);
   Trajectory trajectory(jerk_minimizer(
-    car_s, car_speed, 0, final_s, final_v, 0));
+    car_s, car_speed, car_a, final_s, final_v, final_a));
 
-  for (size_t i = 0; i < plan_x.size(); ++i) {
-    std::cout << i << "\t" << plan_s[i] << "\t" << plan_x[i] << "\t" << plan_y[i] << std::endl;
-  }
-
-  for (double t = 0; t < HORIZON - LATENCY; t += DT) {
+  for (double t = DT; t < HORIZON - LATENCY; t += DT) {
     double s_t = trajectory.GetPosition(t);
     Map::CartesianPoint point = map.GetCartesianSpline(s_t, 6.16483);
-    std::cout << t << "\t" << s_t << "\t" << point.x << "\t" << point.y << "\t" << trajectory.GetSpeed(t) << std::endl;
     plan_x.push_back(point.x);
     plan_y.push_back(point.y);
     plan_s.push_back(s_t);
     plan_d.push_back(6.16483);
+  }
+
+  for (size_t i = 0; i < GetPlanSize(); ++i) {
+    std::cout << i << "\t" << plan_s[i] << "\t" << plan_x[i] << "\t" << plan_y[i] << "\t";
+    if (i > 0) {
+      double vx = (plan_x[i] - plan_x[i - 1]) / DT;
+      double vy = (plan_y[i] - plan_y[i - 1]) / DT;
+      std::cout << sqrt(vx * vx + vy * vy);
+    }
+    std::cout << "\t" << (i < old_size ? "*" : " ") << std::endl;
   }
 }
 
