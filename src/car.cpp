@@ -10,6 +10,8 @@ const double MAX_SPEED = 22; // 22 m/s is just under 50mph;
 const double TARGET_SPEED = 20; // m/s
 const double MIN_SPEED = -2; // m/s
 const double COLLISION_RADIUS_SQUARED = 4; // m
+const double MAX_D = 12; // m
+const double LANE_WIDTH = 4;
 
 const double FAIL_WEIGHT = 10;
 const double TARGET_WEIGHT = 1;
@@ -85,13 +87,23 @@ double Car::GetCost(double t, const std::vector<Car> &other_cars) const {
   double max_speed_penalty = fmax(0, speed - MAX_SPEED);
   double min_speed_penalty = -fmin(0, speed + MIN_SPEED);
 
+  double lane_d = d.GetPosition(t);
+  double max_d_penalty = fmax(0, lane_d - MAX_D);
+  double min_d_penalty = -fmin(0, lane_d);
+
   double fail_penalty = collision_penalty +
     max_jerk_penalty + min_jerk_penalty +
     max_accel_penalty + min_accel_penalty +
-    max_speed_penalty + min_speed_penalty;
+    max_speed_penalty + min_speed_penalty +
+    max_d_penalty + min_d_penalty;
+
+  double lane_centre = LANE_WIDTH * (
+    round((lane_d - LANE_WIDTH / 2) / LANE_WIDTH) + 0.5);
+  double lane_keeping_penalty = LANE_WIDTH *
+    logistic(fabs(lane_d - lane_centre));
 
   double target_penalty = fabs(speed - TARGET_SPEED) +
-    fabs(jerk) + fabs(acceleration);
+    fabs(jerk) + fabs(acceleration) + lane_keeping_penalty;
   return FAIL_WEIGHT * fail_penalty + TARGET_WEIGHT * target_penalty;
 }
 
@@ -131,6 +143,6 @@ bool Car::CollidesWithAny(double t, const std::vector<Car> &other_cars) const {
 }
 
 std::ostream &operator<<(std::ostream &os, const Car &car) {
-  os << "s:" << car.s;
+  os << "s:" << car.s << " d:" << car.d;
   return os;
 }

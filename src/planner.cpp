@@ -10,6 +10,8 @@ const double DT = 0.02; // seconds per timestep
 const double HORIZON = 5; // seconds
 const double LATENCY = 0.3; // seconds
 
+const double LANE_WIDTH = 4;
+
 Planner::Planner(const Map &map) :
   map(map), jerk_minimizer(HORIZON - LATENCY) { }
 
@@ -62,58 +64,77 @@ void Planner::Update(size_t previous_plan_size,
   deltas[3] = 1.0 / delta_size;
   deltas[4] = delta_size;
 
-  for (;;) {
-    double start_cost = GetCost(car);
-    for (size_t i = 0; i < goal.size(); ++i) {
-      size_t best_delta = 0;
-      double best_cost = std::numeric_limits<double>::infinity();
-      for (size_t j = 0; j < deltas.size(); ++j) {
-        goal[i] += step_size[i] * deltas[j];
-        Car candidate_car = Car::MakeQuintic(jerk_minimizer,
-          car_s, car_v, car_a, 6.16483,
-          goal[0], goal[1], goal[2], 6.16483);
-        goal[i] -= step_size[i] * deltas[j];
-        double candidate_cost = GetCost(candidate_car);
-        if (candidate_cost < best_cost) {
-          best_cost = candidate_cost;
-          best_delta = j;
+  std::array<int, 3> lane_deltas({{-1, 0, 1}});
+  std::array<Car, 3> lane_cars({{car, car, car}});
+  size_t best_lane = 1;
+  double best_lane_cost = std::numeric_limits<double>::infinity();
+
+  for (size_t lane = 0; lane < lane_deltas.size(); ++lane) {
+    double lane_d = LANE_WIDTH * (
+      round((car_d - LANE_WIDTH / 2) / LANE_WIDTH) + lane_deltas[lane] + 0.5);
+
+    double end_cost;
+    for (;;) {
+      double start_cost = GetCost(lane_cars[lane]);
+      for (size_t i = 0; i < goal.size(); ++i) {
+        size_t best_delta = 0;
+        double best_cost = std::numeric_limits<double>::infinity();
+        for (size_t j = 0; j < deltas.size(); ++j) {
+          goal[i] += step_size[i] * deltas[j];
+          Car candidate_car = Car::MakeQuintic(jerk_minimizer,
+            car_s, car_v, car_a, car_d,
+            goal[0], goal[1], goal[2], lane_d);
+          goal[i] -= step_size[i] * deltas[j];
+          double candidate_cost = GetCost(candidate_car);
+          if (candidate_cost < best_cost) {
+            best_cost = candidate_cost;
+            best_delta = j;
+          }
+        }
+        if (deltas[best_delta] == 0) {
+          step_size[i] /= delta_size;
+        } else {
+          goal[i] += step_size[i] * deltas[best_delta];
+          step_size[i] *= deltas[best_delta];
         }
       }
-      if (deltas[best_delta] == 0) {
-        step_size[i] /= delta_size;
-      } else {
-        goal[i] += step_size[i] * deltas[best_delta];
-        step_size[i] *= deltas[best_delta];
-      }
+      lane_cars[lane] = Car::MakeQuintic(jerk_minimizer,
+        car_s, car_v, car_a, car_d,
+        goal[0], goal[1], goal[2], lane_d);
+      end_cost = GetCost(lane_cars[lane]);
+      // std:: cout << "GD " << lane_d << " " << goal[0] << "\t" << goal[1] << "\t" << goal[2] << "\t" << end_cost << "\t" << car << std::endl;
+      if (fabs(start_cost - end_cost) < 1e-3) break;
     }
-    car = Car::MakeQuintic(jerk_minimizer,
-      car_s, car_v, car_a, 6.16483,
-      goal[0], goal[1], goal[2], 6.16483);
-    double end_cost = GetCost(car);
-    std:: cout << "GD " << goal[0] << "\t" << goal[1] << "\t" << goal[2] << "\t" << end_cost << "\t" << car << std::endl;
-    if (fabs(start_cost - end_cost) < 1e-3) break;
+
+    if (end_cost < best_lane_cost) {
+      best_lane_cost = end_cost;
+      best_lane = lane;
+    }
   }
+  // std::cout << lane_deltas[best_lane] << std::endl;
+  car = lane_cars[best_lane];
 
   TrimPlan();
 
   for (double t = DT; t <= HORIZON - LATENCY; t += DT) {
     double s_t = car.GetS(t);
-    Map::CartesianPoint point = map.GetCartesianSpline(s_t, 6.16483);
+    double d_t = car.GetD(t);
+    Map::CartesianPoint point = map.GetCartesianSpline(s_t, d_t);
     plan_x.push_back(point.x);
     plan_y.push_back(point.y);
     plan_s.push_back(s_t);
-    plan_d.push_back(6.16483);
+    plan_d.push_back(d_t);
   }
 
-  for (size_t i = 0; i < GetPlanSize(); ++i) {
-    std::cout << i << "\t" << plan_s[i] << "\t" << plan_x[i] << "\t" << plan_y[i] << "\t";
-    if (i > 0) {
-      double vx = (plan_x[i] - plan_x[i - 1]) / DT;
-      double vy = (plan_y[i] - plan_y[i - 1]) / DT;
-      std::cout << sqrt(vx * vx + vy * vy);
-    }
-    std::cout << std::endl;
-  }
+  // for (size_t i = 0; i < GetPlanSize(); ++i) {
+  //   std::cout << i << "\t" << plan_s[i] << "\t" << plan_x[i] << "\t" << plan_y[i] << "\t" << plan_d[i] << "\t";
+  //   if (i > 0) {
+  //     double vx = (plan_x[i] - plan_x[i - 1]) / DT;
+  //     double vy = (plan_y[i] - plan_y[i - 1]) / DT;
+  //     std::cout << sqrt(vx * vx + vy * vy);
+  //   }
+  //   std::cout << std::endl;
+  // }
 }
 
 double Planner::AdvancePlan(size_t previous_plan_size) {
