@@ -100,9 +100,7 @@ int main() {
               planner.AddOtherCar(other_car);
             }
 
-            if (previous_path_x.size() > 0) {
-              planner.Update(previous_path_x[0], previous_path_y[0]);
-            }
+            planner.Update(previous_path_x.size());
             planner.Plan(car_s, car_d, car_speed);
 
           	json msgJson;

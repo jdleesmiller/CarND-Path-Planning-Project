@@ -11,8 +11,6 @@ const double DT = 0.02; // seconds per timestep
 const double HORIZON = 3; // seconds
 const double LATENCY = 0.3; // seconds
 
-const double UPDATE_TOLERANCE = 1e-3;
-
 const double LANE_WIDTH = 4.0; // meters
 const double LANE_TOLERANCE = 0.5; // meters
 
@@ -68,24 +66,18 @@ size_t Planner::GetPlanSize() const {
   return plan_x.size();
 }
 
-void Planner::Update(double previous_x, double previous_y) {
-  bool found = false;
-  while (GetPlanSize() > 0) {
-    double dx = plan_x.front() - previous_x;
-    double dy = plan_y.front() - previous_y;
-    if (found) {
-      if (fabs(dx) >= UPDATE_TOLERANCE || fabs(dy) >= UPDATE_TOLERANCE) {
-        return;
-      }
-    } else if (fabs(dx) < UPDATE_TOLERANCE && fabs(dy) < UPDATE_TOLERANCE) {
-      found = true;
-    }
-    plan_x.pop_front();
-    plan_y.pop_front();
-    plan_s.pop_front();
-    plan_d.pop_front();
+void Planner::Update(size_t previous_plan_size) {
+  size_t n;
+  if (previous_plan_size > GetPlanSize()) {
+    std::cerr << "WARNING: previous plan too large" << std::endl;
+    return;
+  } else {
+    n = GetPlanSize() - previous_plan_size;
   }
-  std::cerr << "WARNING: failed to locate previous (x, y)" << std::endl;
+  plan_x.erase(plan_x.begin(), plan_x.begin() + n);
+  plan_y.erase(plan_y.begin(), plan_y.begin() + n);
+  plan_s.erase(plan_s.begin(), plan_s.begin() + n);
+  plan_d.erase(plan_d.begin(), plan_d.begin() + n);
 }
 
 void Planner::ClearOtherCars() {

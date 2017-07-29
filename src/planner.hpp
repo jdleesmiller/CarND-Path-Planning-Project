@@ -24,7 +24,7 @@ struct Planner {
 
   Planner(const Map &map);
 
-  void Update(double previous_x, double previous_y);
+  void Update(size_t previous_plan_size);
 
   void ClearOtherCars();
 
