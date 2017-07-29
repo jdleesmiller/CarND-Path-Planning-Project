@@ -89,19 +89,14 @@ int main() {
           	auto sensor_fusion = j[1]["sensor_fusion"];
             planner.ClearOtherCars();
             for (size_t i = 0; i < sensor_fusion.size(); ++i) {
-              Planner::OtherCar other_car;
-              other_car.id = sensor_fusion[i][0];
-              other_car.x = sensor_fusion[i][1];
-              other_car.y = sensor_fusion[i][2];
-              other_car.vx = sensor_fusion[i][3];
-              other_car.vy = sensor_fusion[i][4];
-              other_car.s = sensor_fusion[i][5];
-              other_car.d = sensor_fusion[i][6];
-              planner.AddOtherCar(other_car);
+              double vx = sensor_fusion[i][3];
+              double vy = sensor_fusion[i][4];
+              double s = sensor_fusion[i][5];
+              double d = sensor_fusion[i][6];
+              planner.AddOtherCar(s, d, vx, vy);
             }
 
-            planner.Update(previous_path_x.size());
-            planner.Plan(car_s, car_d, car_speed);
+            planner.Update(previous_path_x.size(), car_s, car_d, car_speed);
 
           	json msgJson;
           	msgJson["next_x"] = planner.GetPlanX();
@@ -109,7 +104,7 @@ int main() {
 
           	auto msg = "42[\"control\","+ msgJson.dump()+"]";
 
-          	this_thread::sleep_for(chrono::milliseconds(1000));
+          	// this_thread::sleep_for(chrono::milliseconds(1000));
           	ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
 
         }

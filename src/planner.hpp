@@ -3,34 +3,18 @@
 
 #include <deque>
 
+#include "car.hpp"
 #include "map.hpp"
 
 struct Planner {
-  struct OtherCar {
-    size_t id;
-    double x;
-    double y;
-    double vx;
-    double vy;
-    double s;
-    double d;
-
-    double GetSpeed() const;
-
-    double GetRange(double car_s) const;
-
-    bool IsBlocking(double car_s, double car_d) const;
-  };
-
   Planner(const Map &map);
-
-  void Update(size_t previous_plan_size);
 
   void ClearOtherCars();
 
-  void AddOtherCar(const OtherCar &other_car);
+  void AddOtherCar(double s, double d, double vx, double vy);
 
-  void Plan(double car_s, double car_d, double car_speed);
+  void Update(size_t previous_plan_size,
+    double car_s, double car_d, double car_v);
 
   size_t GetPlanSize() const;
 
@@ -39,6 +23,8 @@ struct Planner {
   const std::deque<double> &GetPlanY() const { return plan_y; }
 
 private:
+  double AdvancePlan(size_t previous_plan_size);
+
   void TrimPlan();
 
   size_t FindNearestBlockingCar(double car_s, double car_d);
@@ -48,7 +34,9 @@ private:
   std::deque<double> plan_y;
   std::deque<double> plan_s;
   std::deque<double> plan_d;
-  std::vector<OtherCar> other_cars;
+  Trajectory::JerkMinimizer jerk_minimizer;
+  Car car;
+  std::vector<Car> other_cars;
 };
 
 #endif

@@ -1,151 +1,91 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
+#include <limits>
+#include <random>
 
 #include "planner.hpp"
 #include "trajectory.hpp"
-
-const double MAX_S = 6945.554;
 
 const double DT = 0.02; // seconds per timestep
 const double HORIZON = 3; // seconds
 const double LATENCY = 0.3; // seconds
 
-const double LANE_WIDTH = 4.0; // meters
-const double LANE_TOLERANCE = 0.5; // meters
+const size_t NUM_SAMPLES = 2000;
 
-const double MAX_JERK = 2; // m/s^3
-const double MAX_ACCELERATION = 2; // m/s^2
-const double MAX_SPEED = 21; // 22 m/s is just under 50mph;
-const double MIN_SPEED = -5; // m/s
+std::random_device rd;
+std::mt19937 gen(rd());
 
-//
-// Assuming we operate at maximum jerk (or negative jerk) for the whole horizon,
-// find the final speed and position that would result. This gives us an
-// 'envelope'
-//
-void GetMaxDistanceAndSpeed(
-  double sign, double max_speed, double &s, double &v)
-{
-  double a = 0;
-  for (double t = 0; t < HORIZON - LATENCY; t += DT) {
-    a = a + sign * MAX_JERK * DT;
-    if (a > MAX_ACCELERATION) { a = MAX_ACCELERATION; }
-    if (a < -MAX_ACCELERATION) { a = -MAX_ACCELERATION; }
-    v = v + a * DT;
-    if (v > max_speed) { v = max_speed; }
-    if (v < MIN_SPEED) { v = MIN_SPEED; }
-    s = s + v * DT;
-  }
-}
+const double S_STDEV = 50;
+const double V_STDEV = 10;
+const double A_STDEV = 10;
 
-double Planner::OtherCar::GetSpeed() const {
-  return sqrt(vx * vx + vy * vy);
-}
+std::normal_distribution<> S_DISTRIBUTION(0, S_STDEV);
+std::normal_distribution<> V_DISTRIBUTION(0, V_STDEV);
+std::normal_distribution<> A_DISTRIBUTION(0, A_STDEV);
 
-double Planner::OtherCar::GetRange(double car_s) const {
-  double ds = s - car_s;
-  if (ds > MAX_S / 2) {
-    // The other car is near the end of the track; our car is near the start.
-    ds -= MAX_S;
-  } else if (ds < -MAX_S / 2) {
-    // The other car is near the start of the track; our car is near the end.
-    ds += MAX_S;
-  }
-  return ds;
-}
-
-bool Planner::OtherCar::IsBlocking(double car_s, double car_d) const {
-  return GetRange(car_s) >= 0 &&
-    fabs(d - car_d) < LANE_WIDTH / 2 + LANE_TOLERANCE;
-}
-
-Planner::Planner(const Map &map) : map(map) { }
+Planner::Planner(const Map &map) :
+  map(map), jerk_minimizer(HORIZON - LATENCY) { }
 
 size_t Planner::GetPlanSize() const {
   return plan_x.size();
-}
-
-void Planner::Update(size_t previous_plan_size) {
-  size_t n;
-  if (previous_plan_size > GetPlanSize()) {
-    std::cerr << "WARNING: previous plan too large" << std::endl;
-    return;
-  } else {
-    n = GetPlanSize() - previous_plan_size;
-  }
-  plan_x.erase(plan_x.begin(), plan_x.begin() + n);
-  plan_y.erase(plan_y.begin(), plan_y.begin() + n);
-  plan_s.erase(plan_s.begin(), plan_s.begin() + n);
-  plan_d.erase(plan_d.begin(), plan_d.begin() + n);
 }
 
 void Planner::ClearOtherCars() {
   other_cars.clear();
 }
 
-void Planner::AddOtherCar(const OtherCar &other_car) {
-  other_cars.push_back(other_car);
+void Planner::AddOtherCar(double s, double d, double vx, double vy) {
+  other_cars.push_back(Car::MakeLinear(s, d, vx, vy));
 }
 
-void Planner::Plan(double car_s, double car_d, double car_speed) {
-  // idea:
-  // search in 3 (s, s_dot) planes, one for each of d = -1, 0 1.
-  // must finish the movement within the horizon (zero accel, zero jerk)
-  // - not great for getting up to speed --- would actually want to
-  //   finish with positive acceleration, unless the horizon is long enough to
-  //   reach maximum speed
-  // upper bound for s_dot:
-  // - assume maximum jerk, up to maximum acceleration, up to max speed.
-  // upper bound for s:
-  // - just integrate the max s_dot profile
-  //
+void Planner::Update(size_t previous_plan_size,
+  double car_s, double car_d, double car_v)
+{
+  double car_a = 0;
+  double elapsed_time = AdvancePlan(previous_plan_size);
+  if (elapsed_time == 0) {
+    car = Car::MakeInitial(jerk_minimizer, car_s, car_v, car_a, car_d);
+  } else {
+    car_s = car.GetS(elapsed_time);
+    car_v = car.GetSpeed(elapsed_time);
+    car_a = car.GetAcceleration(elapsed_time);
+    car_d = car.GetD(elapsed_time);
+  }
+
+  double end_time = elapsed_time + HORIZON - LATENCY;
+  double end_car_s = car.GetS(end_time);
+  double end_car_v = car.GetSpeed(end_time);
+  double end_car_a = car.GetAcceleration(end_time);
+  // std::cout << "END s=" << end_car_s << " v=" << end_car_v << " a=" << end_car_a << std::endl;
+  // double new_car_d = car.GetD(end_time);
+  Car best_car;
+  double best_cost = std::numeric_limits<double>::infinity();
+  for (size_t i = 0; i < NUM_SAMPLES; ++i) {
+    double candidate_s = end_car_s + S_DISTRIBUTION(gen);
+    double candidate_v = end_car_v + V_DISTRIBUTION(gen);
+    double candidate_a = end_car_a + A_DISTRIBUTION(gen);
+    Car candidate_car = Car::MakeQuintic(jerk_minimizer,
+      car_s, car_v, car_a, 6.16483,
+      candidate_s, candidate_v, candidate_a, 6.16483);
+    double candidate_cost = candidate_car.GetTotalCost(
+      0, DT, HORIZON - LATENCY, other_cars);
+    // if (i % 100 == 0) {
+    //   std::cout << "s=" << candidate_s << " v=" << candidate_v << " a=" << candidate_a << " cost=" << candidate_cost << std::endl;
+    //   std::cout << candidate_car << std::endl;
+    // }
+    if (candidate_cost < best_cost) {
+      best_cost = candidate_cost;
+      best_car = candidate_car;
+    }
+  }
+  std::cout << best_car << " best cost=" << best_cost << std::endl;
+  car = best_car;
 
   TrimPlan();
 
-  double car_a = 0;
-  if (GetPlanSize() > 1) {
-    car_s = plan_s.back();
-    if (car_s > MAX_S) {
-      car_s -= MAX_S;
-    }
-    car_speed = (plan_s[GetPlanSize() - 1] - plan_s[GetPlanSize() - 2]) / DT;
-  }
-  if (GetPlanSize() > 2) {
-    car_a = (
-      plan_s[GetPlanSize() - 1] -
-      2 * plan_s[GetPlanSize() - 2] +
-      plan_s[GetPlanSize() - 3]) / (DT * DT);
-  }
-  std::cout << "CAR A " << car_a << std::endl;
-
-  double target_speed = MAX_SPEED;
-  size_t blocking_index = FindNearestBlockingCar(car_s, car_d);
-  if (blocking_index < other_cars.size()) {
-    double headway = other_cars[blocking_index].GetRange(car_s) / car_speed;
-    if (headway <= HORIZON) {
-      std::cout << "BLOCKING " << other_cars[blocking_index].id << " " << other_cars[blocking_index].d << " v=" << other_cars[blocking_index].GetSpeed() << std::endl;
-      target_speed = other_cars[blocking_index].GetSpeed() * 0.99;
-    }
-  }
-
-  double final_s = car_s;
-  double final_v = car_speed;
-  GetMaxDistanceAndSpeed(1, target_speed, final_s, final_v);
-  std::cout << "init s=" << car_s << "init v=" << car_speed << " final s=" << final_s << " final v=" << final_v << std::endl;
-  size_t old_size = GetPlanSize();
-
-  double final_a = 0;
-  if (final_v < MAX_SPEED / 2) {
-    final_a = MAX_ACCELERATION / 2;
-  }
-
-  Trajectory::JerkMinimizer jerk_minimizer(HORIZON - LATENCY);
-  Trajectory trajectory(jerk_minimizer(
-    car_s, car_speed, car_a, final_s, final_v, final_a));
-
-  for (double t = DT; t < HORIZON - LATENCY; t += DT) {
-    double s_t = trajectory.GetPosition(t);
+  for (double t = DT; t <= HORIZON - LATENCY; t += DT) {
+    double s_t = car.GetS(t);
     Map::CartesianPoint point = map.GetCartesianSpline(s_t, 6.16483);
     plan_x.push_back(point.x);
     plan_y.push_back(point.y);
@@ -153,15 +93,30 @@ void Planner::Plan(double car_s, double car_d, double car_speed) {
     plan_d.push_back(6.16483);
   }
 
-  for (size_t i = 0; i < GetPlanSize(); ++i) {
-    std::cout << i << "\t" << plan_s[i] << "\t" << plan_x[i] << "\t" << plan_y[i] << "\t";
-    if (i > 0) {
-      double vx = (plan_x[i] - plan_x[i - 1]) / DT;
-      double vy = (plan_y[i] - plan_y[i - 1]) / DT;
-      std::cout << sqrt(vx * vx + vy * vy);
-    }
-    std::cout << "\t" << (i < old_size ? "*" : " ") << std::endl;
+  // for (size_t i = 0; i < GetPlanSize(); ++i) {
+  //   std::cout << i << "\t" << plan_s[i] << "\t" << plan_x[i] << "\t" << plan_y[i] << "\t";
+  //   if (i > 0) {
+  //     double vx = (plan_x[i] - plan_x[i - 1]) / DT;
+  //     double vy = (plan_y[i] - plan_y[i - 1]) / DT;
+  //     std::cout << sqrt(vx * vx + vy * vy);
+  //   }
+  //   std::cout << std::endl;
+  // }
+}
+
+double Planner::AdvancePlan(size_t previous_plan_size) {
+  size_t n;
+  if (previous_plan_size > GetPlanSize()) {
+    std::cerr << "WARNING: previous plan too large" << std::endl;
+    return 0;
+  } else {
+    n = GetPlanSize() - previous_plan_size;
   }
+  plan_x.erase(plan_x.begin(), plan_x.begin() + n);
+  plan_y.erase(plan_y.begin(), plan_y.begin() + n);
+  plan_s.erase(plan_s.begin(), plan_s.begin() + n);
+  plan_d.erase(plan_d.begin(), plan_d.begin() + n);
+  return n * DT;
 }
 
 void Planner::TrimPlan() {
@@ -170,18 +125,4 @@ void Planner::TrimPlan() {
   plan_y.erase(plan_y.begin() + n, plan_y.end());
   plan_s.erase(plan_s.begin() + n, plan_s.end());
   plan_d.erase(plan_d.begin() + n, plan_d.end());
-}
-
-size_t Planner::FindNearestBlockingCar(double car_s, double car_d) {
-  double min_s = std::numeric_limits<double>::infinity();
-  size_t min_i = std::numeric_limits<size_t>::max();
-  for (size_t i = 0; i < other_cars.size(); ++i) {
-    if (other_cars[i].IsBlocking(car_s, car_d)) {
-      if (other_cars[i].s < min_s) {
-        min_s = other_cars[i].s;
-        min_i = i;
-      }
-    }
-  }
-  return min_i;
 }
