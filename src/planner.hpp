@@ -32,8 +32,6 @@ private:
   const Map &map;
   std::deque<double> plan_x;
   std::deque<double> plan_y;
-  std::deque<double> plan_s;
-  std::deque<double> plan_d;
   Trajectory::JerkMinimizer jerk_minimizer;
   Car car;
   std::vector<Car> other_cars;

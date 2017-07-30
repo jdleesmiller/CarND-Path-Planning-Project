@@ -148,8 +148,6 @@ void Planner::Update(size_t previous_plan_size,
     Map::CartesianPoint point = map.GetCartesianSpline(s_t, d_t);
     plan_x.push_back(point.x);
     plan_y.push_back(point.y);
-    plan_s.push_back(s_t);
-    plan_d.push_back(d_t);
   }
 
   // for (size_t i = 0; i < GetPlanSize(); ++i) {
@@ -173,8 +171,6 @@ double Planner::AdvancePlan(size_t previous_plan_size) {
   }
   plan_x.erase(plan_x.begin(), plan_x.begin() + n);
   plan_y.erase(plan_y.begin(), plan_y.begin() + n);
-  plan_s.erase(plan_s.begin(), plan_s.begin() + n);
-  plan_d.erase(plan_d.begin(), plan_d.begin() + n);
   return n * DT;
 }
 
@@ -182,6 +178,4 @@ void Planner::TrimPlan() {
   size_t n = std::min((size_t)(LATENCY / DT), plan_x.size());
   plan_x.erase(plan_x.begin() + n, plan_x.end());
   plan_y.erase(plan_y.begin() + n, plan_y.end());
-  plan_s.erase(plan_s.begin() + n, plan_s.end());
-  plan_d.erase(plan_d.begin() + n, plan_d.end());
 }
