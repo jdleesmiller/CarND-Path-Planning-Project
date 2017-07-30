@@ -11,7 +11,7 @@ const double MAX_ACCELERATION = 5; // m/s^2
 const double MAX_SPEED = 22; // 22 m/s is just under 50mph;
 const double TARGET_SPEED = 20.5; // m/s
 const double MIN_SPEED = -2; // m/s
-const double COLLISION_LENGTH = 15; // m
+const double COLLISION_LENGTH = 18; // m
 const double COLLISION_WIDTH = 3.4; // m
 const double MAX_D = 12; // m
 const double LANE_WIDTH = 4;
@@ -86,8 +86,7 @@ double logistic(double x) {
 }
 
 double Car::GetCost(double t, const std::vector<Car> &other_cars, bool debug) const {
-  double collision_penalty =
-    CollidesWithAny(t, other_cars) ? 20 : 0;
+  double collision_penalty = CollidesWithAny(t, other_cars) ? 100 : 0;
 
   double jerk = s.GetJerk(t);
   double max_jerk_penalty = fmax(0, jerk - MAX_JERK);
