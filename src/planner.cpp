@@ -61,6 +61,7 @@ void Planner::Update(size_t previous_plan_size,
   if (elapsed_time == 0) {
     car = Car::MakeInitial(jerk_minimizer, car_s, car_v, car_a, car_d);
   } else {
+    car.WrapSIfNeeded();
     car_s = car.GetS(elapsed_time);
     car_v = car.GetSpeed(elapsed_time);
     car_a = car.GetAcceleration(elapsed_time);

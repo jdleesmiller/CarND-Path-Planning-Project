@@ -32,6 +32,8 @@ struct Trajectory {
 
   double GetPosition(double t) const;
 
+  void TranslateTo(double c0);
+
   double GetSpeed(double t) const;
 
   double GetAcceleration(double t) const;

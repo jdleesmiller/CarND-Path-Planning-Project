@@ -35,6 +35,10 @@ Trajectory Trajectory::JerkMinimizer::operator()(
   return Trajectory(s0, v0, a0/2, x[0], x[1], x[2]);
 }
 
+void Trajectory::TranslateTo(double c0) {
+  coefficients[0] = c0;
+}
+
 double Trajectory::GetPosition(double t) const {
   return coefficients[0] + t * (
     coefficients[1] + t * (

@@ -21,6 +21,8 @@ struct Car {
 
   static Car MakeLinear(double s0, double d0, double vx, double vy);
 
+  void WrapSIfNeeded();
+
   double GetS(double t) const;
 
   double GetSpeed(double t) const;

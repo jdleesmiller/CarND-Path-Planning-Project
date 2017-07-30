@@ -47,12 +47,14 @@ Car Car::MakeLinear(double s0, double d0, double vx, double vy) {
   return Car(s, d);
 }
 
-double Car::GetS(double t) const {
-  double s_t = s.GetPosition(t);
-  if (s_t > MAX_S) {
-    s_t -= MAX_S;
+void Car::WrapSIfNeeded() {
+  if (s.GetPosition(0) > MAX_S) {
+    s.TranslateTo(s.GetPosition(0) - MAX_S);
   }
-  return s_t;
+}
+
+double Car::GetS(double t) const {
+  return s.GetPosition(t);
 }
 
 double Car::GetSpeed(double t) const {
