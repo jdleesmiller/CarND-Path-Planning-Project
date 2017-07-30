@@ -5,6 +5,7 @@
 #include <random>
 
 #include "planner.hpp"
+#include "common.hpp"
 #include "trajectory.hpp"
 
 // Initial latency estimate, before we start estimating it.
@@ -13,12 +14,11 @@ const double LATENCY_DEFAULT = 0.25; // seconds
 // Smoothing factor for the exponential moving average of the timestep.
 const double LATENCY_SMOOTH = 0.1;
 
-const double DT = 0.02; // seconds per timestep
 const double HORIZON = 3.25; // seconds
 const double LATENCY = 0.25; // seconds
 const size_t MAX_ITERS = 10;
 
-const size_t NUM_SAMPLES = 10;
+const size_t NUM_SAMPLES = 20;
 
 std::random_device rd;
 std::mt19937 gen(rd());
