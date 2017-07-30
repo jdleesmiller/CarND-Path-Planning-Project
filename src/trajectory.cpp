@@ -83,6 +83,32 @@ double Trajectory::GetJerk(double t) const {
   );
 }
 
+void Trajectory::GetBounds(double t0, double dt, double t1,
+  double &min_value, double &max_value) const
+{
+  min_value = std::numeric_limits<double>::infinity();
+  max_value = -std::numeric_limits<double>::infinity();
+  for (double t = t0; t <= t1; t += dt) {
+    double v = GetPosition(t);
+    if (v < min_value) { min_value = v; }
+    if (v > max_value) { max_value = v; }
+  }
+}
+
+void Trajectory::GetFirstOrderBounds(double t0, double t1,
+  double &min_value, double &max_value) const
+{
+  double v0 = coefficients[0] + t0 * coefficients[1];
+  double v1 = coefficients[0] + t1 * coefficients[1];
+  if (v0 < v1) {
+    min_value = v0;
+    max_value = v1;
+  } else {
+    max_value = v0;
+    min_value = v1;
+  }
+}
+
 std::ostream &operator<<(std::ostream &os, const Trajectory &trajectory) {
   for (auto it = trajectory.GetCoefficients().cbegin();
     it != trajectory.GetCoefficients().cend(); ++it) {

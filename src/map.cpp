@@ -1,5 +1,3 @@
-#include "map.hpp"
-
 #include <cmath>
 #include <fstream>
 #include <limits>
@@ -7,8 +5,8 @@
 #include <sstream>
 #include <string>
 
-// The max s value before wrapping around the track back to 0
-const double MAX_S = 6945.554;
+#include "map.hpp"
+#include "common.hpp"
 
 // Repat this many points at the start and the end to make sure the
 // splines knit together when s wraps around MAX_S.

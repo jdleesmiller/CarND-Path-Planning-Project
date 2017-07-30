@@ -1,10 +1,7 @@
 #include <iostream>
 
 #include "car.hpp"
-
-const double MAX_S = 6945.554;
-
-const double DT = 0.02;
+#include "common.hpp"
 
 const double MAX_JERK = 6; // m/s^3
 const double MAX_ACCELERATION = 5; // m/s^2
@@ -174,9 +171,35 @@ double Car::GetCost(double t, const std::vector<Car> &other_cars, bool debug) co
 double Car::GetTotalCost(
   double t0, double dt, double t1, const std::vector<Car> &other_cars, bool debug) const
 {
+  // Find the car's bounding box for collision detection pruning.
+  double car_min_s, car_max_s;
+  double car_min_d, car_max_d;
+  s.GetBounds(t0, dt, t1, car_min_s, car_max_s);
+  d.GetBounds(t0, dt, t1, car_min_d, car_max_d);
+  car_min_s -= COLLISION_LENGTH;
+  car_max_s += COLLISION_LENGTH;
+  car_min_d -= COLLISION_WIDTH;
+  car_max_d += COLLISION_WIDTH;
+
+  // Prune the list of other cars based on bounding boxes.
+  std::vector<Car> close_cars;
+  close_cars.reserve(other_cars.size());
+  for (auto it = other_cars.cbegin(); it != other_cars.cend(); ++it) {
+    double other_min_s, other_max_s;
+    double other_min_d, other_max_d;
+    it->s.GetFirstOrderBounds(t0, t1, other_min_s, other_max_s);
+    it->d.GetFirstOrderBounds(t0, t1, other_min_d, other_max_d);
+
+    bool can_collide = BoxesIntersect(
+      car_min_d, car_max_d, car_min_s, car_max_s,
+      other_min_d, other_max_d, other_min_s, other_max_s
+    );
+    if (can_collide) close_cars.push_back(*it);
+  }
+
   double cost = 0;
   for (double t = t0; t <= t1; t += dt) {
-    cost += GetCost(t, other_cars, debug) * dt;
+    cost += GetCost(t, close_cars, debug) * dt;
   }
   return cost;
 }

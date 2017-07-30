@@ -40,6 +40,31 @@ struct Trajectory {
 
   double GetJerk(double t) const;
 
+  /**
+   * Get the min and max value by checking the qunitic at each time point in
+   * [t0, t1] by dt.
+   *
+   * @param t0 start time (inclusive)
+   * @param dt time step
+   * @param t1 end time (inclusive)
+   * @param min_value set to the minimum value for the trajectory in [t0, t1]
+   * @param max_value set to the maximum value for the trajectory in [t0, t1]
+   */
+  void GetBounds(double t0, double dt, double t1,
+    double &min_value, double &max_value) const;
+
+  /**
+   * Get the min and max value assuming that the quintic is affine. That is,
+   * we only consider the first two coefficients and ignore the rest.
+   *
+   * @param t0 start time (inclusive)
+   * @param t1 end time (inclusive)
+   * @param min_value set to the minimum value for the trajectory in [t0, t1]
+   * @param max_value set to the maximum value for the trajectory in [t0, t1]
+   */
+  void GetFirstOrderBounds(double t0, double t1,
+    double &min_value, double &max_value) const;
+
 private:
   Coefficients coefficients;
 };
