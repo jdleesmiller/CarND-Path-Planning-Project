@@ -1,6 +1,7 @@
 #ifndef PATH_PLANNING_PLANNER_H
 #define PATH_PLANNING_PLANNER_H
 
+#include <chrono>
 #include <deque>
 
 #include "car.hpp"
@@ -30,11 +31,23 @@ private:
   double GetCost(const Car &c, bool debug = false) const;
 
   const Map &map;
+
   std::deque<double> plan_x;
   std::deque<double> plan_y;
+
   Trajectory::JerkMinimizer jerk_minimizer;
+
+  // The current s and d trajectories recommended by the planner.
   Car car;
+
+  // Other cars from sensor fusion data (to be avoided).
   std::vector<Car> other_cars;
+
+  // Time of last update, if any.
+  std::chrono::steady_clock::time_point t;
+
+  // Smoothed time from last update to current update, in seconds.
+  double latency;
 };
 
 #endif

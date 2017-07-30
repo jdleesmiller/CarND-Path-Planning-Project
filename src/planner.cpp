@@ -7,6 +7,12 @@
 #include "planner.hpp"
 #include "trajectory.hpp"
 
+// Initial latency estimate, before we start estimating it.
+const double LATENCY_DEFAULT = 0.25; // seconds
+
+// Smoothing factor for the exponential moving average of the timestep.
+const double LATENCY_SMOOTH = 0.1;
+
 const double DT = 0.02; // seconds per timestep
 const double HORIZON = 3.25; // seconds
 const double LATENCY = 0.25; // seconds
@@ -28,7 +34,9 @@ std::normal_distribution<> A_DISTRIBUTION(0, A_STDEV);
 const double LANE_WIDTH = 4;
 
 Planner::Planner(const Map &map) :
-  map(map), jerk_minimizer(HORIZON - LATENCY) { }
+  map(map), jerk_minimizer(HORIZON - LATENCY),
+  t(std::chrono::steady_clock::now()),
+  latency(LATENCY_DEFAULT) { }
 
 size_t Planner::GetPlanSize() const {
   return plan_x.size();
@@ -142,7 +150,6 @@ void Planner::Update(size_t previous_plan_size,
     }
   }
 
-  std::cout << best_car << " best cost=" << best_cost << std::endl;
   car = best_car;
 
   TrimPlan();
@@ -154,6 +161,17 @@ void Planner::Update(size_t previous_plan_size,
     plan_x.push_back(point.x);
     plan_y.push_back(point.y);
   }
+
+  auto new_t = std::chrono::steady_clock::now();
+  std::chrono::duration<double> dt_duration = new_t - t;
+  double new_latency = dt_duration.count();
+  latency = new_latency * LATENCY_SMOOTH + latency * (1 - LATENCY_SMOOTH);
+  t = new_t;
+
+  std::cout <<
+    "s=" << best_car.GetS(0) <<
+    " latency=" << latency <<
+    " cost=" << best_cost << std::endl;
 
   // for (size_t i = 0; i < GetPlanSize(); ++i) {
   //   std::cout << i << "\t" << plan_s[i] << "\t" << plan_x[i] << "\t" << plan_y[i] << "\t" << plan_d[i] << "\t";
