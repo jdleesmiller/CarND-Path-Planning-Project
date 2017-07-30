@@ -12,7 +12,7 @@ const double MAX_SPEED = 22; // 22 m/s is just under 50mph;
 const double TARGET_SPEED = 20.5; // m/s
 const double MIN_SPEED = -2; // m/s
 const double COLLISION_LENGTH = 15; // m
-const double COLLISION_WIDTH = 3.7; // m
+const double COLLISION_WIDTH = 3.4; // m
 const double MAX_D = 12; // m
 const double LANE_WIDTH = 4;
 

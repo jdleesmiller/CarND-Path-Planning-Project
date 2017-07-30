@@ -8,8 +8,8 @@
 #include "trajectory.hpp"
 
 const double DT = 0.02; // seconds per timestep
-const double HORIZON = 3.5; // seconds
-const double LATENCY = 0.5; // seconds
+const double HORIZON = 3.25; // seconds
+const double LATENCY = 0.25; // seconds
 const size_t MAX_ITERS = 10;
 
 const size_t NUM_SAMPLES = 10;
