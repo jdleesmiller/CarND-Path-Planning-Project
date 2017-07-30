@@ -16,25 +16,13 @@ struct Map {
     double d_y;
   };
 
-  struct FrenetPoint {
-    double s;
-    double d;
-  };
-
   struct CartesianPoint {
     double x;
     double y;
   };
 
-  // Transform from Frenet s,d coordinates to Cartesian x,y using linear
-  // interpolation.
-  CartesianPoint GetCartesianLinear(double s, double d) const;
-
   // Transform from Frenet s,d coordinates to Cartesian x,y using the spline.
   CartesianPoint GetCartesianSpline(double s, double d) const;
-
-  // Transform from Cartesian x,y coordinates to Frenet s,d coordinates
-  FrenetPoint GetFrenet(double x, double y, double theta) const;
 
 private:
   void LoadWaypoints(const char *file);

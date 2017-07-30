@@ -1,16 +1,10 @@
-#include <fstream>
-#include <math.h>
 #include <uWS/uWS.h>
-#include <chrono>
-#include <iostream>
 #include <thread>
-#include <vector>
-#include "Eigen-3.3/Eigen/Core"
-#include "Eigen-3.3/Eigen/QR"
 #include "json.hpp"
 
 #include "map.hpp"
 #include "planner.hpp"
+#include "test.hpp"
 
 using namespace std;
 
@@ -32,20 +26,9 @@ string hasData(string s) {
   return "";
 }
 
-// struct MapWaypoint {
-//   double x;
-//   double y;
-//
-//   MapWaypoint(double x, double y) : x(x), y(y) { }
-//
-//   struct ByX {
-//     bool operator()(const MapWaypoint &a, const MapWaypoint &b) {
-//       return a.x < b.x;
-//     }
-//   };
-// };
-
 int main() {
+  run_tests();
+
   uWS::Hub h;
 
   Map map("../data/highway_map.csv");
@@ -71,19 +54,19 @@ int main() {
           // j[1] is the data JSON object
 
         	// Main car's localization Data
-          	double car_x = j[1]["x"];
-          	double car_y = j[1]["y"];
+          	// double car_x = j[1]["x"];
+          	// double car_y = j[1]["y"];
           	double car_s = j[1]["s"];
           	double car_d = j[1]["d"];
-          	double car_yaw = j[1]["yaw"];
+          	// double car_yaw = j[1]["yaw"];
           	double car_speed = j[1]["speed"];
 
           	// Previous path data given to the Planner
           	auto previous_path_x = j[1]["previous_path_x"];
           	auto previous_path_y = j[1]["previous_path_y"];
           	// Previous path's end s and d values
-          	double end_path_s = j[1]["end_path_s"];
-          	double end_path_d = j[1]["end_path_d"];
+          	// double end_path_s = j[1]["end_path_s"];
+          	// double end_path_d = j[1]["end_path_d"];
 
           	// Sensor Fusion Data, a list of all other cars on the same side of the road.
           	auto sensor_fusion = j[1]["sensor_fusion"];

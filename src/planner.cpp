@@ -54,11 +54,6 @@ double Planner::GetCost(const Car &c, bool debug) const {
   return c.GetTotalCost(0, DT, HORIZON - LATENCY, other_cars, debug);
 }
 
-// double RoundToLane(double d) {
-//   double lane = round((d - LANE_WIDTH / 2) / LANE_WIDTH);
-//   return LANE_WIDTH * (lane + 0.5);
-// }
-
 void Planner::Update(size_t previous_plan_size,
   double car_s, double car_d, double car_v)
 {
