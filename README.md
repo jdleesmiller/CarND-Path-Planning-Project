@@ -1,13 +1,53 @@
 # CarND-Path-Planning-Project
 Self-Driving Car Engineer Nanodegree Program
 
-# Notes
+# Model Documentation
 
-Tried sampling, but even with thousands of samples, the behaviour was quite erratic.
+## Map
 
-Tried hill climbing, but it was very unlikely to change lanes --- it needs to both change lanes and try a higher speed in order to find out that it's better, so simple coordinate descent does not work.
+The `Map` is responsible for translating from Frenet (s, d) coordinates to Cartesian (x, y) coordinates, based on the provided waypoint data. To smooth the map data, it fits four cubic splines to the waypoint data: one on each of (s, x), (s, y), (s, dx) and (s, dy). It uses these splines to look up the position and direction for a given `s`, and then uses the map's unit normal vector to translate for `d`.
 
-So: hybrid approach.
+## Trajectory
+
+The `Trajectory` class is responsible for fitting a 1D jerk-minimizing trajectory given boundary conditions on position, speed and acceleration. For efficiency reasons, the jerk minimization is implemented as a functor; its constructor builds the LU decomposition for the weights matrix for a given time horizon, which is reused for multiple sets of boundary conditions. (This also avoids the need to explicitly invert the matrix.)
+
+## Car and Cost Function
+
+The `Car` class combines two Trajectories, one for each of the two Frenet coordinates, `s` and `d`. There is one Car instance for the car being controlled, for which we use jerk-minimizing trajectories for both coordinates.
+
+The `Car` class is also used to model the other cars on the roads. For them we simply use an affine model for `s` by setting the first two terms of the quintic from the sensor fusion package and setting the rest to zero. (That is, the model is `s_0 + v * t` for the observed initial `s` position `s_0` and observed speed `v`). Similarly, the trajectory for `d` uses only the first term --- for planning purposes, it is assumed that the other cars do not change lanes.
+
+Copies of the main `Car` instance are used in the Planner to evaluate possible trajectories. Each `Car` instance computes its cost, which is calculated at each planning time step; the planner adds these costs to obtain the total cost for the car's proposed `s` and `d` trajectories. The cost function comprises:
+
+1. A very heavily weighted penalty for collisions with other vehicles. Collisions are detected in (`s`, `d`) space, which is simple to implement but does require fairly large safety margins to avoid glancing collisions.
+
+1. Heavily weighted penalties for leaving the road surface or violating constraints on jerk, acceleration or speed.
+
+1. A moderately weighted penalty for the absolute difference between the instantaneous and target speeds.
+
+1. Lightly weighted penalties for longitudinal and lateral jerk and acceleration, to encourage straighter trajectories, and lane centering and lane preference to keep the car in lane and incentivize quick lane changes.
+
+Profiling showed that ~75% of time was spent in collision detection when using a naive approach (compare positions at all timesteps), so we can try to improve that.
+
+## Planner
+
+The planner uses a combination of sampling and hill climbing to find good trajectories.
+
+Testing with sampling alone showed occasional erratic behavior, even when the number of samples was relatively large.
+
+Testing with hill climbing alone showed that it was very unlikely to change lanes --- it needs to both change lanes and try a higher speed in order to find out that it's better, so simple coordinate descent does not work.
+
+The combined approach is:
+
+1. Choose a lane. Fix the `d` coordinate goal to the center of the lane and require that the lateral speed and acceleration be zero.
+
+2. Generate a small number of sample `s` trajectories (~10) in that lane. Each sample is based on the state at the end of the currently planned trajectory with Gaussian noise added to each component (`s`, speed, acceleration).
+
+3. For each lane and sample trajectory, do a few iterations of hill climbing (up to 10) on the `s` goal state to try to reduce the cost function.
+
+The sampling makes it likely that the planner will discover that it can go faster in another lane, and the hill climbing lets it refine the trajectory to make its cost competitive with the more refined trajectory for the current lane based on the existing planned trajectory.
+
+# Project Brief
 
 ### Simulator. You can download the Term3 Simulator BETA which contains the Path Planning Project from the [releases tab](https://github.com/udacity/self-driving-car-sim/releases).
 
@@ -68,7 +108,7 @@ the path has processed since last time.
 
 ## Tips
 
-A really helpful resource for doing this project and creating smooth trajectories was using http://kluge.in-chemnitz.de/opensource/spline/, the spline function is in a single hearder file is really easy to use.
+A really helpful resource for doing this project and creating smooth trajectories was using http://kluge.in-chemnitz.de/opensource/spline/, the spline function is in a single header file is really easy to use.
 
 ---
 
@@ -110,33 +150,3 @@ Please (do your best to) stick to [Google's C++ style guide](https://google.gith
 
 Note: regardless of the changes you make, your project must be buildable using
 cmake and make!
-
-
-## Call for IDE Profiles Pull Requests
-
-Help your fellow students!
-
-We decided to create Makefiles with cmake to keep this project as platform
-agnostic as possible. Similarly, we omitted IDE profiles in order to ensure
-that students don't feel pressured to use one IDE or another.
-
-However! I'd love to help people get up and running with their IDEs of choice.
-If you've created a profile for an IDE that you think other students would
-appreciate, we'd love to have you add the requisite profile files and
-instructions to ide_profiles/. For example if you wanted to add a VS Code
-profile, you'd add:
-
-* /ide_profiles/vscode/.vscode
-* /ide_profiles/vscode/README.md
-
-The README should explain what the profile does, how to take advantage of it,
-and how to install it.
-
-Frankly, I've never been involved in a project with multiple IDE profiles
-before. I believe the best way to handle this would be to keep them out of the
-repo root to avoid clutter. My expectation is that most profiles will include
-instructions to copy files to a new location to get picked up by the IDE, but
-that's just a guess.
-
-One last note here: regardless of the IDE used, every submitted project must
-still be compilable with cmake and make./
