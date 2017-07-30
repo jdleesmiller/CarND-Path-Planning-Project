@@ -7,11 +7,16 @@
 #include "Eigen-3.3/Eigen/LU"
 
 /**
- * 1D quintic polynomial trajectory.
+ * 1D quintic polynomial trajectory with utilities for finding jerk-minimizing
+ * trajectories.
  */
 struct Trajectory {
   typedef std::array<double, 6> Coefficients;
 
+  /**
+   * Find a 1D quintic polynomial trajectory that minimizes jerk.
+   * @param t time horizon; final boundary conditions are at this time.
+   */
   struct JerkMinimizer {
     JerkMinimizer(double t);
     Trajectory operator()(
@@ -30,14 +35,46 @@ struct Trajectory {
 
   const Coefficients &GetCoefficients() const { return coefficients; }
 
+  /**
+   * Evaluate the polynomial at the given time.
+   *
+   * @param  t time
+   * @return position
+   */
   double GetPosition(double t) const;
 
+  /**
+   * Reset the constant coefficient for the trajectory.
+   *
+   * @param c0 constant coefficient
+   */
   void TranslateTo(double c0);
 
+  /**
+   * Evaluate the polynomial's derivative at the given time to find
+   * instantaneous speed.
+   *
+   * @param  t time
+   * @return speed
+   */
   double GetSpeed(double t) const;
 
+  /**
+   * Evaluate the polynomial's second derivative at the given time to find
+   * instantaneous acceleration.
+   *
+   * @param  t time
+   * @return acceleration
+   */
   double GetAcceleration(double t) const;
 
+  /**
+   * Evaluate the polynomial's third derivative at the given time to find
+   * instantaneous jerk.
+   *
+   * @param  t time
+   * @return jerk
+   */
   double GetJerk(double t) const;
 
   /**

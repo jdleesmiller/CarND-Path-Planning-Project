@@ -50,13 +50,17 @@ void Planner::AddOtherCar(double s, double d, double vx, double vy) {
   other_cars.push_back(Car::MakeLinear(s, d, vx, vy));
 }
 
-double Planner::GetCost(const Car &c, bool debug) const {
-  return c.GetTotalCost(0, DT, HORIZON - LATENCY, other_cars, debug);
+double Planner::GetCost(const Car &c) const {
+  return c.GetTotalCost(0, DT, HORIZON - LATENCY, other_cars);
 }
 
 void Planner::Update(size_t previous_plan_size,
   double car_s, double car_d, double car_v)
 {
+  // Find out where the car is in (s, d) space, based on how many of the
+  // points we sent in the last timestep have come back as "previous points"
+  // in this timestep --- this is the elapsed time (in whole timesteps) since
+  // our last update.
   double car_a = 0;
   double car_dv = 0;
   double car_da = 0;
@@ -73,6 +77,8 @@ void Planner::Update(size_t previous_plan_size,
     car_da = car.GetDAcceleration(elapsed_time);
   }
 
+  // Latency compensation: project where the car will be at the end of the
+  // latency delay, based on its previous trajectory.
   double end_time = HORIZON - LATENCY;
   double end_s = car.GetS(end_time);
   double end_v = car.GetSpeed(end_time);
@@ -81,9 +87,11 @@ void Planner::Update(size_t previous_plan_size,
   Car best_car;
   double best_cost = std::numeric_limits<double>::infinity();
 
+  // Check each possible goal lane.
   for (int lane = 0; lane < 3; ++lane) {
     double goal_d = lane * LANE_WIDTH + LANE_WIDTH / 2;
 
+    // For each goal lane, generate goal samples.
     for (size_t num_samples = 0; num_samples < NUM_SAMPLES; ++num_samples) {
       std::array<double, 3> goal;
       goal[0] = end_s + S_DISTRIBUTION(gen);
@@ -105,6 +113,8 @@ void Planner::Update(size_t previous_plan_size,
         car_s, car_v, car_a, car_d, car_dv, car_da,
         goal[0], goal[1], goal[2], goal_d);
 
+      // For each sample, try to improve the plan by hill climbing (well,
+      // we're minimizing, so in that sense we are going down hill).
       for (size_t num_iters = 0; num_iters < MAX_ITERS; ++num_iters) {
         double start_cost = GetCost(car);
         for (size_t i = 0; i < goal.size(); ++i) {
@@ -134,7 +144,7 @@ void Planner::Update(size_t previous_plan_size,
         car = Car::MakeQuintic(jerk_minimizer,
           car_s, car_v, car_a, car_d, car_dv, car_da,
           goal[0], goal[1], goal[2], goal_d);
-        double end_cost = GetCost(car, false);
+        double end_cost = GetCost(car);
         if (end_cost < best_cost) {
           best_cost = end_cost;
           best_car = car;
@@ -147,8 +157,8 @@ void Planner::Update(size_t previous_plan_size,
 
   car = best_car;
 
+  // Convert the reference trajectory into (x, y) space for the simulator.
   TrimPlan();
-
   for (double t = DT; t <= HORIZON - LATENCY; t += DT) {
     double s_t = car.GetS(t);
     double d_t = car.GetD(t);
@@ -157,6 +167,7 @@ void Planner::Update(size_t previous_plan_size,
     plan_y.push_back(point.y);
   }
 
+  // Keep track of latency for monitoring.
   auto new_t = std::chrono::steady_clock::now();
   std::chrono::duration<double> dt_duration = new_t - t;
   double new_latency = dt_duration.count();

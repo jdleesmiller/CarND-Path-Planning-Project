@@ -5,6 +5,10 @@
 
 #include "spline.h"
 
+/**
+ * Map from Frenet (s, d) space to Cartesian (x, y) space using the waypoints.
+ * See README for more information.
+ */
 struct Map {
   Map(const char *file);
 
@@ -28,10 +32,6 @@ private:
   void LoadWaypoints(const char *file);
 
   void FitSplines();
-
-  size_t GetClosestWaypointIndex(double x, double y) const;
-
-  size_t GetNextWaypointIndex(double x, double y, double theta) const;
 
   std::vector<Waypoint> waypoints;
   tk::spline x_spline;

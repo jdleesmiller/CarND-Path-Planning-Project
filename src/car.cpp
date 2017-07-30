@@ -3,17 +3,35 @@
 #include "car.hpp"
 #include "common.hpp"
 
+// Maximum jerk and acceleration constraints. Set these lower than the limits
+// enforced by the simulator, because these are in (s, d) space, and I think
+// the simulator is working in (x, y) space. There can therefore be some
+// additional acceleration and jerk due to the road geometry, which we don't
+// capture here.
 const double MAX_JERK = 6; // m/s^3
 const double MAX_ACCELERATION = 5; // m/s^2
+
+// Speed limits: the simulator complains if we go over 50mph. Note that this is
+// speed in s only --- speed in (x, y) space can be different, so don't put
+// this too close to the actual limit.
 const double MAX_SPEED = 22; // 22 m/s is just under 50mph;
 const double TARGET_SPEED = 20.5; // m/s
 const double MIN_SPEED = -2; // m/s
+
+// Check for collisions with other vehicles in (s, d) space. Because this is
+// (s, d) space, and because it has to work at high speed, we need large safety
+// margins around the vehicle.
 const double COLLISION_LENGTH = 18; // m
 const double COLLISION_WIDTH = 3.4; // m
-const double MAX_D = 12; // m
-const double LANE_WIDTH = 4;
 
+// Define lanes. This assumes that there are always 3 lanes.
+const double MAX_D = 12; // m
+const double LANE_WIDTH = 4; // m
+
+// Main weights for cost function.
 const double FAIL_WEIGHT = 50;
+const double COLLISION_WEIGHT = 100; // note: multiplied with FAIL_WEIGHT
+const double TARGET_SPEED_WEIGHT = 10;
 const double TARGET_WEIGHT = 1;
 
 Car::Car() { }
@@ -82,8 +100,9 @@ double logistic(double x) {
   return 1.0 / (1.0 + exp(-x));
 }
 
-double Car::GetCost(double t, const std::vector<Car> &other_cars, bool debug) const {
-  double collision_penalty = CollidesWithAny(t, other_cars) ? 100 : 0;
+double Car::GetCost(double t, const std::vector<Car> &other_cars) const {
+  double collision_penalty =
+    CollidesWithAny(t, other_cars) ? COLLISION_WEIGHT : 0;
 
   double jerk = s.GetJerk(t);
   double max_jerk_penalty = fmax(0, jerk - MAX_JERK);
@@ -137,39 +156,16 @@ double Car::GetCost(double t, const std::vector<Car> &other_cars, bool debug) co
     break;
   }
 
-  double target_penalty = 10 * fabs(speed - TARGET_SPEED) +
+  double target_penalty = TARGET_SPEED_WEIGHT * fabs(speed - TARGET_SPEED) +
     fabs(jerk * DT) + fabs(acceleration * DT) +
     fabs(lateral_jerk * DT) + fabs(lateral_acceleration * DT) +
     lane_keeping_penalty + lane_preference_penalty;
-
-  if (debug) {
-    std::cout << "fail=" << fail_penalty << " target=" << target_penalty << std::endl;
-    std::cout << "collision=" << collision_penalty <<
-      " jerk =" << jerk <<
-      " max_jerk_penalty =" << max_jerk_penalty <<
-      " min_jerk_penalty =" << min_jerk_penalty <<
-      " acceleration =" << acceleration <<
-      " max_accel_penalty =" << max_accel_penalty <<
-      " min_accel_penalty =" << min_accel_penalty <<
-      " speed =" << speed <<
-      " max_speed_penalty =" << max_speed_penalty <<
-      " min_speed_penalty =" << min_speed_penalty <<
-      " max_d_penalty =" << max_d_penalty <<
-      " min_d_penalty =" << max_d_penalty <<
-      std::endl;
-    std::cout <<
-      " target_speed_penalty =" << fabs(speed - TARGET_SPEED) <<
-      " jerk_penalty =" << fabs(jerk) * DT <<
-      " acceleration_penalty =" << fabs(acceleration) * DT <<
-      " lane_keeping_penalty =" << lane_keeping_penalty <<
-      std::endl;
-  }
 
   return FAIL_WEIGHT * fail_penalty + TARGET_WEIGHT * target_penalty;
 }
 
 double Car::GetTotalCost(
-  double t0, double dt, double t1, const std::vector<Car> &other_cars, bool debug) const
+  double t0, double dt, double t1, const std::vector<Car> &other_cars) const
 {
   // Find the car's bounding box for collision detection pruning.
   double car_min_s, car_max_s;
@@ -199,7 +195,7 @@ double Car::GetTotalCost(
 
   double cost = 0;
   for (double t = t0; t <= t1; t += dt) {
-    cost += GetCost(t, close_cars, debug) * dt;
+    cost += GetCost(t, close_cars) * dt;
   }
   return cost;
 }
@@ -219,11 +215,7 @@ double Range(double s0, double s1) {
 bool Car::Collides(double t, const Car &car) const {
   double ds = Range(car.GetS(t), GetS(t));
   double dd = car.GetD(t) - GetD(t);
-  if (fabs(ds) < COLLISION_LENGTH && fabs(dd) < COLLISION_WIDTH) {
-    // std::cout << "COLLISION: " << car << " at " << t << " ds=" << ds << " dd=" << dd << std::endl;
-    return true;
-  }
-  return false;
+  return fabs(ds) < COLLISION_LENGTH && fabs(dd) < COLLISION_WIDTH;
 }
 
 bool Car::CollidesWithAny(double t, const std::vector<Car> &other_cars) const {

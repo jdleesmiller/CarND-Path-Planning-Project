@@ -7,6 +7,11 @@
 #include "car.hpp"
 #include "map.hpp"
 
+/**
+ * Main trajectory planner. See README for more information.
+ *
+ * @param map
+ */
 struct Planner {
   Planner(const Map &map);
 
@@ -28,7 +33,7 @@ private:
 
   void TrimPlan();
 
-  double GetCost(const Car &c, bool debug = false) const;
+  double GetCost(const Car &c) const;
 
   const Map &map;
 

@@ -5,7 +5,7 @@ Self-Driving Car Engineer Nanodegree Program
 
 ## Map
 
-The `Map` is responsible for translating from Frenet (s, d) coordinates to Cartesian (x, y) coordinates, based on the provided waypoint data. To smooth the map data, it fits four cubic splines to the waypoint data: one on each of (s, x), (s, y), (s, dx) and (s, dy). It uses these splines to look up the position and direction for a given `s`, and then uses the map's unit normal vector to translate for `d`.
+The `Map` is responsible for translating from Frenet (s, d) coordinates to Cartesian (x, y) coordinates, based on the provided waypoint data. To smooth the map data, it fits four cubic splines to the waypoint data: one on each of (s, x), (s, y), (s, dx) and (s, dy). It uses these splines to look up the position and direction for a given `s`, and then uses the map's unit normal vector to translate perpendicularly by `d`.
 
 ## Trajectory
 
@@ -27,7 +27,7 @@ Copies of the main `Car` instance are used in the Planner to evaluate possible t
 
 1. Lightly weighted penalties for longitudinal and lateral jerk and acceleration, to encourage straighter trajectories, and lane centering and lane preference to keep the car in lane and incentivize quick lane changes.
 
-Profiling showed that ~75% of time was spent in collision detection when using a naive approach (compare positions at all timesteps), so we can try to improve that.
+Profiling showed that ~75% of time was spent in collision detection when using a naive approach (compare positions at all timesteps), so the collision detection step now calculates bounding boxes first and only does the detailed trajectory comparison for vehicles whose trajectory bounding boxes overlap.
 
 ## Planner
 
@@ -41,11 +41,15 @@ The combined approach is:
 
 1. Choose a lane. Fix the `d` coordinate goal to the center of the lane and require that the lateral speed and acceleration be zero.
 
-2. Generate a small number of sample `s` trajectories (~10) in that lane. Each sample is based on the state at the end of the currently planned trajectory with Gaussian noise added to each component (`s`, speed, acceleration).
+2. Generate a small number of sample `s` trajectories (20) in that lane. Each sample is based on the state at the end of the currently planned `s` trajectory with Gaussian noise added to each component (`s`, speed, acceleration).
 
 3. For each lane and sample trajectory, do a few iterations of hill climbing (up to 10) on the `s` goal state to try to reduce the cost function.
 
 The sampling makes it likely that the planner will discover that it can go faster in another lane, and the hill climbing lets it refine the trajectory to make its cost competitive with the more refined trajectory for the current lane based on the existing planned trajectory.
+
+All of the planning is done in (s, d) space with the quintics. The chosen s and d trajectories are then converted into (x, y) space to pass back to the simulator. For this purpose, the planner maintains a `deque` which allows it to efficiently remove points from the start when the simulator has processed them and add more points to the end as the plan is extended.
+
+The planner runs in ~100ms for on my laptop. It works well in light traffic, but it does sometimes get 'boxed in' --- a situation where it might be able to free itself by slowing down to pass a vehicle that is preventing it from changing lanes. Such a trajectory is usually inconsistent with a single jerk-minimizing quintic, so the planner would need to be made stateful in order to plan multiple quintics, e.g. by introducing a finite state machine.
 
 # Project Brief
 
